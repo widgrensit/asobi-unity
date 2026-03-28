@@ -1,0 +1,22 @@
+{
+  "name": "com.asobi.sdk",
+  "version": "0.1.0",
+  "displayName": "Asobi SDK",
+  "description": "Unity client SDK for Asobi game backend. Authentication, matchmaking, real-time multiplayer, leaderboards, economy, social, cloud saves, and more.",
+  "unity": "2021.3",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/widgrensit/asobi-unity.git"
+  },
+  "keywords": [
+    "asobi",
+    "game-backend",
+    "multiplayer",
+    "matchmaking",
+    "leaderboards"
+  ],
+  "author": {
+    "name": "widgrensit"
+  }
+}

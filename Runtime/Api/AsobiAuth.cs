@@ -1,0 +1,47 @@
+using System.Threading.Tasks;
+
+namespace Asobi
+{
+    public class AsobiAuth
+    {
+        readonly AsobiClient _client;
+        internal AsobiAuth(AsobiClient client) => _client = client;
+
+        public async Task<AuthResponse> RegisterAsync(string username, string password, string displayName = null)
+        {
+            var req = new AuthRequest
+            {
+                username = username,
+                password = password,
+                display_name = displayName ?? username
+            };
+            var resp = await _client.Http.Post<AuthResponse>("/api/v1/auth/register", req);
+            _client.SessionToken = resp.session_token;
+            _client.PlayerId = resp.player_id;
+            return resp;
+        }
+
+        public async Task<AuthResponse> LoginAsync(string username, string password)
+        {
+            var req = new AuthRequest { username = username, password = password };
+            var resp = await _client.Http.Post<AuthResponse>("/api/v1/auth/login", req);
+            _client.SessionToken = resp.session_token;
+            _client.PlayerId = resp.player_id;
+            return resp;
+        }
+
+        public async Task<RefreshResponse> RefreshAsync()
+        {
+            var req = new RefreshRequest { session_token = _client.SessionToken };
+            var resp = await _client.Http.Post<RefreshResponse>("/api/v1/auth/refresh", req);
+            _client.SessionToken = resp.session_token;
+            return resp;
+        }
+
+        public void Logout()
+        {
+            _client.SessionToken = null;
+            _client.PlayerId = null;
+        }
+    }
+}
