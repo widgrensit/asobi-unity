@@ -200,6 +200,7 @@ namespace Asobi
                     OnNotification?.Invoke(raw);
                     break;
                 case "matchmaker.matched":
+                case "match.matched":
                     OnMatchmakerMatched?.Invoke(raw);
                     break;
                 case "error":
