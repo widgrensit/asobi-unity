@@ -18,13 +18,9 @@
 *.mdb
 *.opendb
 *.VC.db
-*.pidb.meta
-*.pdb.meta
-*.mdb.meta
 .vs/
 .vsconfig
 .idea/
-*.meta
 erl_crash.dump
 CLAUDE.md
 .tool-versions
