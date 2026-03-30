@@ -17,6 +17,7 @@ namespace Asobi
         public AsobiTournaments Tournaments { get; }
         public AsobiNotifications Notifications { get; }
         public AsobiStorage Storage { get; }
+        public AsobiIAP IAP { get; }
         public AsobiRealtime Realtime { get; }
 
         internal HttpClient Http { get; }
@@ -55,6 +56,7 @@ namespace Asobi
             Tournaments = new AsobiTournaments(this);
             Notifications = new AsobiNotifications(this);
             Storage = new AsobiStorage(this);
+            IAP = new AsobiIAP(this);
             Realtime = new AsobiRealtime(this);
         }
 

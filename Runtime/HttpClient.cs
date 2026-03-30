@@ -71,10 +71,16 @@ namespace Asobi
             return Send<T>(req);
         }
 
-        public Task<AsobiResponse> Delete(string path)
+        public Task<AsobiResponse> Delete(string path, object body = null)
         {
             var url = BuildUrl(path);
-            var req = UnityWebRequest.Delete(url);
+            var req = new UnityWebRequest(url, "DELETE");
+            if (body != null)
+            {
+                var json = JsonUtility.ToJson(body);
+                req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
+                req.SetRequestHeader("Content-Type", "application/json");
+            }
             req.downloadHandler = new DownloadHandlerBuffer();
             return Send<AsobiResponse>(req);
         }
