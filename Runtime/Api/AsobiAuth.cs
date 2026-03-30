@@ -30,6 +30,27 @@ namespace Asobi
             return resp;
         }
 
+        public async Task<OAuthResponse> OAuthAsync(string provider, string token)
+        {
+            var req = new OAuthRequest { provider = provider, token = token };
+            var resp = await _client.Http.Post<OAuthResponse>("/api/v1/auth/oauth", req);
+            _client.SessionToken = resp.session_token;
+            _client.PlayerId = resp.player_id;
+            return resp;
+        }
+
+        public async Task<LinkResponse> LinkProviderAsync(string provider, string token)
+        {
+            var req = new OAuthRequest { provider = provider, token = token };
+            return await _client.Http.Post<LinkResponse>("/api/v1/auth/link", req);
+        }
+
+        public Task<AsobiResponse> UnlinkProviderAsync(string provider)
+        {
+            var req = new UnlinkRequest { provider = provider };
+            return _client.Http.Delete("/api/v1/auth/unlink", req);
+        }
+
         public async Task<RefreshResponse> RefreshAsync()
         {
             var req = new RefreshRequest { session_token = _client.SessionToken };

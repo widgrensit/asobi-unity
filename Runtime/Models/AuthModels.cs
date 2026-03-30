@@ -19,6 +19,36 @@ namespace Asobi
     }
 
     [Serializable]
+    public class OAuthRequest
+    {
+        public string provider;
+        public string token;
+    }
+
+    [Serializable]
+    public class OAuthResponse
+    {
+        public string player_id;
+        public string session_token;
+        public string username;
+        public bool created;
+    }
+
+    [Serializable]
+    public class LinkResponse
+    {
+        public string provider;
+        public string provider_uid;
+        public bool linked;
+    }
+
+    [Serializable]
+    public class UnlinkRequest
+    {
+        public string provider;
+    }
+
+    [Serializable]
     public class RefreshRequest
     {
         public string session_token;
