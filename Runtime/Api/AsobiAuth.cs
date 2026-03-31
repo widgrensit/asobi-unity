@@ -47,8 +47,11 @@ namespace Asobi
 
         public Task<AsobiResponse> UnlinkProviderAsync(string provider)
         {
-            var req = new UnlinkRequest { provider = provider };
-            return _client.Http.Delete("/api/v1/auth/unlink", req);
+            var query = new System.Collections.Generic.Dictionary<string, string>
+            {
+                { "provider", provider }
+            };
+            return _client.Http.Delete("/api/v1/auth/unlink", query: query);
         }
 
         public async Task<RefreshResponse> RefreshAsync()

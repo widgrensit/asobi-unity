@@ -7,9 +7,10 @@ namespace Asobi
         readonly AsobiClient _client;
         internal AsobiNotifications(AsobiClient client) => _client = client;
 
-        public Task<NotificationListResponse> ListAsync()
+        public async Task<NotificationListResponse> ListAsync()
         {
-            return _client.Http.Get<NotificationListResponse>("/api/v1/notifications");
+            var raw = await _client.Http.GetRaw("/api/v1/notifications");
+            return JsonHelper.ParseNotificationList(raw);
         }
 
         public Task<AsobiResponse> MarkReadAsync(string notificationId)

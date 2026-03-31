@@ -72,6 +72,7 @@ namespace Asobi
         public string item_def_id;
         public string player_id;
         public int quantity;
+        public string metadata;
         public string acquired_at;
         public string updated_at;
     }

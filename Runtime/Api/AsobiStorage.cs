@@ -15,46 +15,54 @@ namespace Asobi
             return _client.Http.Get<CloudSaveListResponse>("/api/v1/saves");
         }
 
-        public Task<CloudSave> GetSaveAsync(string slot)
+        public async Task<CloudSave> GetSaveAsync(string slot)
         {
-            return _client.Http.Get<CloudSave>($"/api/v1/saves/{slot}");
+            var raw = await _client.Http.GetRaw($"/api/v1/saves/{slot}");
+            return JsonHelper.ParseCloudSave(raw);
         }
 
-        public Task<CloudSave> PutSaveAsync(string slot, string data, int? version = null)
+        public async Task<CloudSave> PutSaveAsync(string slot, string dataJson, int? version = null)
         {
-            var req = new CloudSavePutRequest { data = data };
-            if (version.HasValue) req.version = version.Value;
-            return _client.Http.Put<CloudSave>($"/api/v1/saves/{slot}", req);
+            string body;
+            if (version.HasValue)
+                body = $"{{\"data\":{dataJson},\"version\":{version.Value}}}";
+            else
+                body = $"{{\"data\":{dataJson}}}";
+            var raw = await _client.Http.PutRaw($"/api/v1/saves/{slot}", body);
+            return JsonHelper.ParseCloudSave(raw);
         }
 
         // --- Generic Storage ---
 
-        public Task<StorageListResponse> ListStorageAsync(string collection, int limit = 50)
+        public async Task<StorageListResponse> ListStorageAsync(string collection, int limit = 50)
         {
             var query = new Dictionary<string, string> { { "limit", limit.ToString() } };
-            return _client.Http.Get<StorageListResponse>($"/api/v1/storage/{collection}", query);
+            var raw = await _client.Http.GetRaw($"/api/v1/storage/{collection}", query);
+            return JsonHelper.ParseStorageList(raw);
         }
 
-        public Task<StorageObject> GetStorageAsync(string collection, string key)
+        public async Task<StorageObject> GetStorageAsync(string collection, string key)
         {
-            return _client.Http.Get<StorageObject>($"/api/v1/storage/{collection}/{key}");
+            var raw = await _client.Http.GetRaw($"/api/v1/storage/{collection}/{key}");
+            return JsonHelper.ParseStorageObject(raw);
         }
 
-        public Task<StorageObject> PutStorageAsync(string collection, string key, string value,
+        public async Task<StorageObject> PutStorageAsync(string collection, string key, string valueJson,
             string readPerm = "owner", string writePerm = "owner")
         {
-            var req = new StoragePutRequest
-            {
-                value = value,
-                read_perm = readPerm,
-                write_perm = writePerm
-            };
-            return _client.Http.Put<StorageObject>($"/api/v1/storage/{collection}/{key}", req);
+            var body = $"{{\"value\":{valueJson},\"read_perm\":\"{EscapeJson(readPerm)}\",\"write_perm\":\"{EscapeJson(writePerm)}\"}}";
+            var raw = await _client.Http.PutRaw($"/api/v1/storage/{collection}/{key}", body);
+            return JsonHelper.ParseStorageObject(raw);
         }
 
         public Task<AsobiResponse> DeleteStorageAsync(string collection, string key)
         {
             return _client.Http.Delete($"/api/v1/storage/{collection}/{key}");
+        }
+
+        static string EscapeJson(string s)
+        {
+            return s.Replace("\\", "\\\\").Replace("\"", "\\\"");
         }
     }
 }

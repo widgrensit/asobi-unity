@@ -71,9 +71,25 @@ namespace Asobi
             return Send<T>(req);
         }
 
-        public Task<AsobiResponse> Delete(string path, object body = null)
+        public Task<string> GetRaw(string path, Dictionary<string, string> query = null)
+        {
+            var url = BuildUrl(path, query);
+            return SendRaw(UnityWebRequest.Get(url));
+        }
+
+        public Task<string> PutRaw(string path, string json)
         {
             var url = BuildUrl(path);
+            var req = new UnityWebRequest(url, "PUT");
+            req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
+            req.downloadHandler = new DownloadHandlerBuffer();
+            req.SetRequestHeader("Content-Type", "application/json");
+            return SendRaw(req);
+        }
+
+        public Task<AsobiResponse> Delete(string path, object body = null, Dictionary<string, string> query = null)
+        {
+            var url = BuildUrl(path, query);
             var req = new UnityWebRequest(url, "DELETE");
             if (body != null)
             {
@@ -83,6 +99,35 @@ namespace Asobi
             }
             req.downloadHandler = new DownloadHandlerBuffer();
             return Send<AsobiResponse>(req);
+        }
+
+        async Task<string> SendRaw(UnityWebRequest req)
+        {
+            if (!string.IsNullOrEmpty(SessionToken))
+                req.SetRequestHeader("Authorization", $"Bearer {SessionToken}");
+
+            var op = req.SendWebRequest();
+
+            while (!op.isDone)
+                await Task.Yield();
+
+            if (req.result == UnityWebRequest.Result.ConnectionError)
+                throw new AsobiException(-1, $"Connection error: {req.error}");
+
+            var responseText = req.downloadHandler?.text;
+
+            if (req.responseCode >= 400)
+            {
+                AsobiError error = null;
+                try { error = JsonUtility.FromJson<AsobiError>(responseText); } catch { }
+                throw new AsobiException(
+                    (int)req.responseCode,
+                    error?.error ?? $"HTTP {req.responseCode}",
+                    error
+                );
+            }
+
+            return responseText;
         }
 
         async Task<T> Send<T>(UnityWebRequest req)
