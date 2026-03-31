@@ -8,6 +8,9 @@ namespace Asobi
         public string id;
         public string mode;
         public string status;
+        public string players;
+        public string result;
+        public string metadata;
         public string started_at;
         public string finished_at;
         public string inserted_at;
