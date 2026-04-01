@@ -25,6 +25,10 @@ namespace Asobi
         public event Action<string> OnChatMessage;
         public event Action<string> OnNotification;
         public event Action<string> OnMatchmakerMatched;
+        public event Action<string> OnVoteStart;
+        public event Action<string> OnVoteTally;
+        public event Action<string> OnVoteResult;
+        public event Action<string> OnVoteVetoed;
         public event Action<string> OnError;
 
         internal AsobiRealtime(AsobiClient client) => _client = client;
@@ -88,6 +92,25 @@ namespace Asobi
         {
             var payload = JsonUtility.ToJson(new WsMatchmakerRemovePayload { ticket_id = ticketId });
             return SendAsync("matchmaker.remove", payload);
+        }
+
+        public Task<string> CastVoteAsync(string voteId, string optionId)
+        {
+            var payload = $"{{\"vote_id\":\"{voteId}\",\"option_id\":\"{optionId}\"}}";
+            return SendAsync("vote.cast", payload);
+        }
+
+        public Task<string> CastVoteAsync(string voteId, string[] optionIds)
+        {
+            var ids = string.Join(",", Array.ConvertAll(optionIds, id => $"\"{id}\""));
+            var payload = $"{{\"vote_id\":\"{voteId}\",\"option_id\":[{ids}]}}";
+            return SendAsync("vote.cast", payload);
+        }
+
+        public Task<string> CastVetoAsync(string voteId)
+        {
+            var payload = $"{{\"vote_id\":\"{voteId}\"}}";
+            return SendAsync("vote.veto", payload);
         }
 
         public Task<string> UpdatePresenceAsync(string status = "online")
@@ -202,6 +225,18 @@ namespace Asobi
                 case "matchmaker.matched":
                 case "match.matched":
                     OnMatchmakerMatched?.Invoke(raw);
+                    break;
+                case "match.vote_start":
+                    OnVoteStart?.Invoke(raw);
+                    break;
+                case "match.vote_tally":
+                    OnVoteTally?.Invoke(raw);
+                    break;
+                case "match.vote_result":
+                    OnVoteResult?.Invoke(raw);
+                    break;
+                case "match.vote_vetoed":
+                    OnVoteVetoed?.Invoke(raw);
                     break;
                 case "error":
                     OnError?.Invoke(raw);
