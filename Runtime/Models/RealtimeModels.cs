@@ -48,6 +48,14 @@ namespace Asobi
     }
 
     [Serializable]
+    internal class WsMatchmakerAddPayload
+    {
+        public string mode;
+        public string properties;
+        public string[] party;
+    }
+
+    [Serializable]
     internal class WsMatchmakerRemovePayload
     {
         public string ticket_id;
@@ -57,6 +65,26 @@ namespace Asobi
     internal class WsPresencePayload
     {
         public string status;
+    }
+
+    [Serializable]
+    internal class WsWorldIdPayload
+    {
+        public string world_id;
+    }
+
+    [Serializable]
+    internal class WsWorldListPayload
+    {
+        public string mode;
+        public bool has_capacity;
+    }
+
+    [Serializable]
+    internal class WsDmSendPayload
+    {
+        public string recipient_id;
+        public string content;
     }
 
     [Serializable]

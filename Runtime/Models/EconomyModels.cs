@@ -89,4 +89,11 @@ namespace Asobi
         public string item_id;
         public int quantity;
     }
+
+    [Serializable]
+    public class ConsumeResponse
+    {
+        public bool success;
+        public int remaining_quantity;
+    }
 }
