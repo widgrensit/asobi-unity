@@ -27,4 +27,14 @@ namespace Asobi
     {
         public string mode;
     }
+
+    [Serializable]
+    public class WorldTerrainChunk
+    {
+        public int[] coords;
+        public string data;
+
+        public int CoordX => coords != null && coords.Length > 0 ? coords[0] : 0;
+        public int CoordY => coords != null && coords.Length > 1 ? coords[1] : 0;
+    }
 }

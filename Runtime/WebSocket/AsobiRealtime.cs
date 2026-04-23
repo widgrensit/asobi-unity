@@ -30,12 +30,21 @@ namespace Asobi
         public event Action<string> OnVoteResult;
         public event Action<string> OnVoteVetoed;
         public event Action<string> OnWorldTick;
+        public event Action<string> OnWorldTerrain;
         public event Action<string> OnWorldJoined;
         public event Action<string> OnWorldLeft;
         public event Action<string, string> OnWorldEvent;
         public event Action<string> OnDmMessage;
         public event Action<string> OnDmSent;
         public event Action<string> OnPresenceUpdated;
+        public event Action<string> OnMatchJoined;
+        public event Action<string> OnMatchLeft;
+        public event Action<string> OnChatJoined;
+        public event Action<string> OnChatLeft;
+        public event Action<string> OnMatchmakerQueued;
+        public event Action<string> OnMatchmakerRemoved;
+        public event Action<string> OnVoteCastOk;
+        public event Action<string> OnVoteVetoOk;
         public event Action<string> OnError;
 
         internal AsobiRealtime(AsobiClient client) => _client = client;
@@ -314,11 +323,38 @@ namespace Asobi
                 case "world.tick":
                     OnWorldTick?.Invoke(raw);
                     break;
+                case "world.terrain":
+                    OnWorldTerrain?.Invoke(raw);
+                    break;
                 case "world.joined":
                     OnWorldJoined?.Invoke(raw);
                     break;
                 case "world.left":
                     OnWorldLeft?.Invoke(raw);
+                    break;
+                case "match.joined":
+                    OnMatchJoined?.Invoke(raw);
+                    break;
+                case "match.left":
+                    OnMatchLeft?.Invoke(raw);
+                    break;
+                case "chat.joined":
+                    OnChatJoined?.Invoke(raw);
+                    break;
+                case "chat.left":
+                    OnChatLeft?.Invoke(raw);
+                    break;
+                case "matchmaker.queued":
+                    OnMatchmakerQueued?.Invoke(raw);
+                    break;
+                case "matchmaker.removed":
+                    OnMatchmakerRemoved?.Invoke(raw);
+                    break;
+                case "vote.cast_ok":
+                    OnVoteCastOk?.Invoke(raw);
+                    break;
+                case "vote.veto_ok":
+                    OnVoteVetoOk?.Invoke(raw);
                     break;
                 case "dm.message":
                     OnDmMessage?.Invoke(raw);
