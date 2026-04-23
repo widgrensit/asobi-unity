@@ -19,6 +19,8 @@ namespace Asobi
         public AsobiStorage Storage { get; }
         public AsobiIAP IAP { get; }
         public AsobiVotes Votes { get; }
+        public AsobiWorlds Worlds { get; }
+        public AsobiDirectMessages DirectMessages { get; }
         public AsobiRealtime Realtime { get; }
 
         internal HttpClient Http { get; }
@@ -59,6 +61,8 @@ namespace Asobi
             Storage = new AsobiStorage(this);
             IAP = new AsobiIAP(this);
             Votes = new AsobiVotes(this);
+            Worlds = new AsobiWorlds(this);
+            DirectMessages = new AsobiDirectMessages(this);
             Realtime = new AsobiRealtime(this);
         }
 

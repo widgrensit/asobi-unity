@@ -26,6 +26,8 @@ namespace Asobi
     public class MatchmakerRequest
     {
         public string mode;
+        public string properties;
+        public string[] party;
     }
 
     [Serializable]

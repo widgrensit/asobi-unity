@@ -24,16 +24,20 @@ namespace Asobi
             return _client.Http.Post<Friendship>("/api/v1/friends", req);
         }
 
+        public Task<Friendship> UpdateFriendAsync(string friendId, string status)
+        {
+            var req = new UpdateFriendRequest { status = status };
+            return _client.Http.Put<Friendship>($"/api/v1/friends/{friendId}", req);
+        }
+
         public Task<Friendship> AcceptFriendAsync(string friendId)
         {
-            var req = new UpdateFriendRequest { status = "accepted" };
-            return _client.Http.Put<Friendship>($"/api/v1/friends/{friendId}", req);
+            return UpdateFriendAsync(friendId, "accepted");
         }
 
         public Task<Friendship> BlockFriendAsync(string friendId)
         {
-            var req = new UpdateFriendRequest { status = "blocked" };
-            return _client.Http.Put<Friendship>($"/api/v1/friends/{friendId}", req);
+            return UpdateFriendAsync(friendId, "blocked");
         }
 
         public Task<AsobiResponse> RemoveFriendAsync(string friendId)
@@ -65,16 +69,40 @@ namespace Asobi
             return _client.Http.Post<AsobiResponse>($"/api/v1/groups/{groupId}/join");
         }
 
+        public Task<Group> UpdateGroupAsync(string groupId, UpdateGroupRequest update)
+        {
+            return _client.Http.Put<Group>($"/api/v1/groups/{groupId}", update);
+        }
+
         public Task<AsobiResponse> LeaveGroupAsync(string groupId)
         {
             return _client.Http.Post<AsobiResponse>($"/api/v1/groups/{groupId}/leave");
         }
 
+        public Task<GroupMembersResponse> GetGroupMembersAsync(string groupId)
+        {
+            return _client.Http.Get<GroupMembersResponse>($"/api/v1/groups/{groupId}/members");
+        }
+
+        public Task<GroupMember> UpdateMemberRoleAsync(string groupId, string playerId, string role)
+        {
+            var req = new UpdateMemberRoleRequest { role = role };
+            return _client.Http.Put<GroupMember>($"/api/v1/groups/{groupId}/members/{playerId}/role", req);
+        }
+
+        public Task<AsobiResponse> RemoveMemberAsync(string groupId, string playerId)
+        {
+            return _client.Http.Delete($"/api/v1/groups/{groupId}/members/{playerId}");
+        }
+
         // --- Chat ---
 
-        public Task<ChatHistoryResponse> GetChatHistoryAsync(string channelId)
+        public Task<ChatHistoryResponse> GetChatHistoryAsync(string channelId, int? limit = null)
         {
-            return _client.Http.Get<ChatHistoryResponse>($"/api/v1/chat/{channelId}/history");
+            Dictionary<string, string> query = null;
+            if (limit.HasValue)
+                query = new Dictionary<string, string> { { "limit", limit.Value.ToString() } };
+            return _client.Http.Get<ChatHistoryResponse>($"/api/v1/chat/{channelId}/history", query);
         }
     }
 }

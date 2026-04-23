@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace Asobi
@@ -7,9 +8,16 @@ namespace Asobi
         readonly AsobiClient _client;
         internal AsobiTournaments(AsobiClient client) => _client = client;
 
-        public Task<TournamentListResponse> ListAsync()
+        public Task<TournamentListResponse> ListAsync(string status = null, int? limit = null)
         {
-            return _client.Http.Get<TournamentListResponse>("/api/v1/tournaments");
+            Dictionary<string, string> query = null;
+            if (status != null || limit.HasValue)
+            {
+                query = new Dictionary<string, string>();
+                if (status != null) query["status"] = status;
+                if (limit.HasValue) query["limit"] = limit.Value.ToString();
+            }
+            return _client.Http.Get<TournamentListResponse>("/api/v1/tournaments", query);
         }
 
         public Task<Tournament> GetAsync(string tournamentId)

@@ -54,6 +54,35 @@ namespace Asobi
     }
 
     [Serializable]
+    public class UpdateGroupRequest
+    {
+        public string name;
+        public string description;
+        public int max_members;
+        public bool open;
+    }
+
+    [Serializable]
+    public class GroupMember
+    {
+        public string player_id;
+        public string role;
+        public string joined_at;
+    }
+
+    [Serializable]
+    public class GroupMembersResponse
+    {
+        public GroupMember[] members;
+    }
+
+    [Serializable]
+    public class UpdateMemberRoleRequest
+    {
+        public string role;
+    }
+
+    [Serializable]
     public class ChatMessage
     {
         public string id;

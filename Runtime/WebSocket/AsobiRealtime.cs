@@ -29,6 +29,22 @@ namespace Asobi
         public event Action<string> OnVoteTally;
         public event Action<string> OnVoteResult;
         public event Action<string> OnVoteVetoed;
+        public event Action<string> OnWorldTick;
+        public event Action<string> OnWorldTerrain;
+        public event Action<string> OnWorldJoined;
+        public event Action<string> OnWorldLeft;
+        public event Action<string, string> OnWorldEvent;
+        public event Action<string> OnDmMessage;
+        public event Action<string> OnDmSent;
+        public event Action<string> OnPresenceUpdated;
+        public event Action<string> OnMatchJoined;
+        public event Action<string> OnMatchLeft;
+        public event Action<string> OnChatJoined;
+        public event Action<string> OnChatLeft;
+        public event Action<string> OnMatchmakerQueued;
+        public event Action<string> OnMatchmakerRemoved;
+        public event Action<string> OnVoteCastOk;
+        public event Action<string> OnVoteVetoOk;
         public event Action<string> OnError;
 
         internal AsobiRealtime(AsobiClient client) => _client = client;
@@ -45,6 +61,11 @@ namespace Asobi
 
             var payload = JsonUtility.ToJson(new WsConnectPayload { token = _client.SessionToken });
             await SendAsync("session.connect", payload);
+        }
+
+        public Task<string> SendHeartbeatAsync()
+        {
+            return SendAsync("session.heartbeat", "{}");
         }
 
         public Task SendMatchInputAsync(string data)
@@ -82,9 +103,14 @@ namespace Asobi
             return SendFireAndForget("chat.send", payload);
         }
 
-        public Task<string> AddToMatchmakerAsync(string mode = "default")
+        public Task<string> AddToMatchmakerAsync(string mode = "default", string properties = null, string[] party = null)
         {
-            var payload = JsonUtility.ToJson(new WsMatchmakerPayload { mode = mode });
+            var payload = JsonUtility.ToJson(new WsMatchmakerAddPayload
+            {
+                mode = mode,
+                properties = properties,
+                party = party
+            });
             return SendAsync("matchmaker.add", payload);
         }
 
@@ -117,6 +143,62 @@ namespace Asobi
         {
             var payload = JsonUtility.ToJson(new WsPresencePayload { status = status });
             return SendAsync("presence.update", payload);
+        }
+
+        // --- World ---
+
+        public Task<string> WorldListAsync(string mode = null, bool? hasCapacity = null)
+        {
+            string payload;
+            if (mode != null || hasCapacity.HasValue)
+            {
+                var parts = new System.Collections.Generic.List<string>();
+                if (mode != null) parts.Add($"\"mode\":\"{mode}\"");
+                if (hasCapacity.HasValue) parts.Add($"\"has_capacity\":{(hasCapacity.Value ? "true" : "false")}");
+                payload = "{" + string.Join(",", parts) + "}";
+            }
+            else
+            {
+                payload = "{}";
+            }
+            return SendAsync("world.list", payload);
+        }
+
+        public Task<string> WorldCreateAsync(string mode)
+        {
+            var payload = JsonUtility.ToJson(new WsMatchmakerPayload { mode = mode });
+            return SendAsync("world.create", payload);
+        }
+
+        public Task<string> WorldFindOrCreateAsync(string mode)
+        {
+            var payload = JsonUtility.ToJson(new WsMatchmakerPayload { mode = mode });
+            return SendAsync("world.find_or_create", payload);
+        }
+
+        public Task<string> WorldJoinAsync(string worldId)
+        {
+            var payload = $"{{\"world_id\":\"{worldId}\"}}";
+            return SendAsync("world.join", payload);
+        }
+
+        public Task<string> WorldLeaveAsync()
+        {
+            return SendAsync("world.leave", "{}");
+        }
+
+        public Task WorldInputAsync(string data)
+        {
+            var payload = JsonUtility.ToJson(new WsMatchInputPayload { data = data });
+            return SendFireAndForget("world.input", payload);
+        }
+
+        // --- DM ---
+
+        public Task SendDmAsync(string recipientId, string content)
+        {
+            var payload = $"{{\"recipient_id\":\"{recipientId}\",\"content\":\"{content}\"}}";
+            return SendFireAndForget("dm.send", payload);
         }
 
         public async Task DisconnectAsync()
@@ -238,6 +320,53 @@ namespace Asobi
                 case "match.vote_vetoed":
                     OnVoteVetoed?.Invoke(raw);
                     break;
+                case "world.tick":
+                    OnWorldTick?.Invoke(raw);
+                    break;
+                case "world.terrain":
+                    OnWorldTerrain?.Invoke(raw);
+                    break;
+                case "world.joined":
+                    OnWorldJoined?.Invoke(raw);
+                    break;
+                case "world.left":
+                    OnWorldLeft?.Invoke(raw);
+                    break;
+                case "match.joined":
+                    OnMatchJoined?.Invoke(raw);
+                    break;
+                case "match.left":
+                    OnMatchLeft?.Invoke(raw);
+                    break;
+                case "chat.joined":
+                    OnChatJoined?.Invoke(raw);
+                    break;
+                case "chat.left":
+                    OnChatLeft?.Invoke(raw);
+                    break;
+                case "matchmaker.queued":
+                    OnMatchmakerQueued?.Invoke(raw);
+                    break;
+                case "matchmaker.removed":
+                    OnMatchmakerRemoved?.Invoke(raw);
+                    break;
+                case "vote.cast_ok":
+                    OnVoteCastOk?.Invoke(raw);
+                    break;
+                case "vote.veto_ok":
+                    OnVoteVetoOk?.Invoke(raw);
+                    break;
+                case "dm.message":
+                    OnDmMessage?.Invoke(raw);
+                    break;
+                case "dm.sent":
+                    OnDmSent?.Invoke(raw);
+                    break;
+                case "presence.updated":
+                    OnPresenceUpdated?.Invoke(raw);
+                    break;
+                case "session.heartbeat":
+                    break;
                 case "error":
                     OnError?.Invoke(raw);
                     break;
@@ -246,6 +375,11 @@ namespace Asobi
                     {
                         var eventName = msg.type.Substring(6);
                         OnMatchEvent?.Invoke(eventName, raw);
+                    }
+                    else if (msg.type != null && msg.type.StartsWith("world."))
+                    {
+                        var eventName = msg.type.Substring(6);
+                        OnWorldEvent?.Invoke(eventName, raw);
                     }
                     break;
             }
