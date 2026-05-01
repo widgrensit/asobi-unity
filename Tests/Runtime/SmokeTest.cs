@@ -8,19 +8,23 @@ using UnityEngine.TestTools;
 namespace Asobi.Tests
 {
     /// <summary>
-    /// Smoke test against asobi-test-harness.
+    /// Smoke test against widgrensit/sdk_demo_backend.
     ///
     /// Exercises the 3 canonical scenarios (auth + WS, matchmaker →
-    /// match.matched, input → state) against a running harness at
-    /// ASOBI_URL (default localhost:8080).
+    /// match.matched, input → state) against a running backend at
+    /// ASOBI_URL (default localhost:8084).
     ///
-    /// Run locally:
+    /// Bring up the backend first:
+    ///   git clone https://github.com/widgrensit/sdk_demo_backend
+    ///   cd sdk_demo_backend && docker compose up -d
+    ///
+    /// Then run:
     ///   Unity -batchmode -nographics -runTests -projectPath . \
     ///         -testPlatform PlayMode -testResults results.xml
     /// </summary>
     public class SmokeTest
     {
-        private const string MatchMode = "smoke";
+        private const string MatchMode = "demo";
         private const int StartupTimeoutSec = 60;
         private const int MatchTimeoutSec = 10;
         private const int StateTimeoutSec = 3;
@@ -36,11 +40,11 @@ namespace Asobi.Tests
         private static async Task RunFlow()
         {
             var (host, port, useSsl) = ParseUrl(
-                Environment.GetEnvironmentVariable("ASOBI_URL") ?? "http://localhost:8080"
+                Environment.GetEnvironmentVariable("ASOBI_URL") ?? "http://localhost:8084"
             );
-            Log($"Waiting for harness at {host}:{port}");
+            Log($"Waiting for backend at {host}:{port}");
             await WaitForServer(host, port, useSsl);
-            Log("Harness reachable.");
+            Log("Backend reachable.");
 
             var a = await SpawnPlayer("a", host, port);
             var b = await SpawnPlayer("b", host, port);
