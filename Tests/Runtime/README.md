@@ -1,4 +1,12 @@
-# Unity smoke test
+# Unity tests
+
+## DispatchTests
+
+`DispatchTests.cs` is a pure-unit dispatch test. Feeds every canonical server-emitted message envelope (vendored under `Resources/Fixtures/` from `asobi/priv/protocol/fixtures`) through `AsobiRealtime.HandleMessage` and asserts the matching event fires. Catches doc-vs-server drift before any user reports a silent failure.
+
+It runs in PlayMode (where the `Tests/Runtime` asmdef lives) but uses `[Test]` (not `[UnityTest]`) and does not require a backend or a scene.
+
+## SmokeTest
 
 `SmokeTest.cs` exercises the 3 canonical scenarios (auth + WS, matchmaker → match.matched, input → state) against [asobi-test-harness](https://github.com/widgrensit/asobi-test-harness). It's a Unity Test Framework `UnityTest`.
 

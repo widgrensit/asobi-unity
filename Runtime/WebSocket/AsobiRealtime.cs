@@ -46,8 +46,19 @@ namespace Asobi
         public event Action<string> OnVoteCastOk;
         public event Action<string> OnVoteVetoOk;
         public event Action<string> OnError;
+        public event Action<string> OnHeartbeat;
+        public event Action<string> OnMatchFinished;
+        public event Action<string> OnMatchmakerExpired;
+        public event Action<string> OnMatchmakerFailed;
+        public event Action<string> OnWorldFinished;
+        public event Action<string> OnWorldList;
+        public event Action<string> OnWorldPhaseChanged;
 
         internal AsobiRealtime(AsobiClient client) => _client = client;
+
+        // Test-only: construct without a client/WebSocket so dispatch logic
+        // can be exercised in isolation.
+        internal AsobiRealtime() { }
 
         public async Task ConnectAsync()
         {
@@ -275,7 +286,7 @@ namespace Asobi
             }
         }
 
-        void HandleMessage(string raw)
+        internal void HandleMessage(string raw)
         {
             var msg = JsonUtility.FromJson<WsMessage>(raw);
             if (msg == null) return;
@@ -304,9 +315,21 @@ namespace Asobi
                 case "notification.new":
                     OnNotification?.Invoke(raw);
                     break;
+                // TODO deprecate: server only emits "match.matched". The
+                // "matchmaker.matched" alias is kept defensively against
+                // historical drift; remove in a future major version.
                 case "matchmaker.matched":
                 case "match.matched":
                     OnMatchmakerMatched?.Invoke(raw);
+                    break;
+                case "match.finished":
+                    OnMatchFinished?.Invoke(raw);
+                    break;
+                case "match.matchmaker_expired":
+                    OnMatchmakerExpired?.Invoke(raw);
+                    break;
+                case "match.matchmaker_failed":
+                    OnMatchmakerFailed?.Invoke(raw);
                     break;
                 case "match.vote_start":
                     OnVoteStart?.Invoke(raw);
@@ -326,11 +349,20 @@ namespace Asobi
                 case "world.terrain":
                     OnWorldTerrain?.Invoke(raw);
                     break;
+                case "world.list":
+                    OnWorldList?.Invoke(raw);
+                    break;
                 case "world.joined":
                     OnWorldJoined?.Invoke(raw);
                     break;
                 case "world.left":
                     OnWorldLeft?.Invoke(raw);
+                    break;
+                case "world.phase_changed":
+                    OnWorldPhaseChanged?.Invoke(raw);
+                    break;
+                case "world.finished":
+                    OnWorldFinished?.Invoke(raw);
                     break;
                 case "match.joined":
                     OnMatchJoined?.Invoke(raw);
@@ -366,6 +398,7 @@ namespace Asobi
                     OnPresenceUpdated?.Invoke(raw);
                     break;
                 case "session.heartbeat":
+                    OnHeartbeat?.Invoke(raw);
                     break;
                 case "error":
                     OnError?.Invoke(raw);
