@@ -40,7 +40,7 @@ namespace Asobi
         public string PlayerId { get; internal set; }
         public bool IsAuthenticated => !string.IsNullOrEmpty(SessionToken);
 
-        public AsobiClient(string host, int port = 8080, bool useSsl = false)
+        public AsobiClient(string host, int port = 8084, bool useSsl = false)
             : this(new AsobiConfig(host, port, useSsl)) { }
 
         public AsobiClient(AsobiConfig config)
@@ -80,7 +80,7 @@ namespace Asobi
         public string BaseUrl { get; }
         public string WsUrl { get; }
 
-        public AsobiConfig(string host, int port = 8080, bool useSsl = false)
+        public AsobiConfig(string host, int port = 8084, bool useSsl = false)
         {
             Host = host;
             Port = port;
