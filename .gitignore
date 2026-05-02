@@ -6,8 +6,10 @@
 [Ll]ogs/
 [Uu]ser[Ss]ettings/
 *.csproj
+!Tests/AsobiCore.NET/Asobi.Core.Tests.csproj
 *.sln
 *.suo
+bin/
 *.tmp
 *.user
 *.userprefs

@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Asobi
 {
-    public class AsobiRealtime : IDisposable
+    public class AsobiRealtime : AsobiDispatcher, IDisposable
     {
         readonly AsobiClient _client;
         ClientWebSocket _ws;
@@ -18,36 +18,11 @@ namespace Asobi
 
         public bool IsConnected => _ws?.State == WebSocketState.Open;
 
-        public event Action OnConnected;
-        public event Action<string> OnDisconnected;
-        public event Action<string> OnMatchState;
-        public event Action<string, string> OnMatchEvent;
-        public event Action<string> OnChatMessage;
-        public event Action<string> OnNotification;
-        public event Action<string> OnMatchmakerMatched;
-        public event Action<string> OnVoteStart;
-        public event Action<string> OnVoteTally;
-        public event Action<string> OnVoteResult;
-        public event Action<string> OnVoteVetoed;
-        public event Action<string> OnWorldTick;
-        public event Action<string> OnWorldTerrain;
-        public event Action<string> OnWorldJoined;
-        public event Action<string> OnWorldLeft;
-        public event Action<string, string> OnWorldEvent;
-        public event Action<string> OnDmMessage;
-        public event Action<string> OnDmSent;
-        public event Action<string> OnPresenceUpdated;
-        public event Action<string> OnMatchJoined;
-        public event Action<string> OnMatchLeft;
-        public event Action<string> OnChatJoined;
-        public event Action<string> OnChatLeft;
-        public event Action<string> OnMatchmakerQueued;
-        public event Action<string> OnMatchmakerRemoved;
-        public event Action<string> OnVoteCastOk;
-        public event Action<string> OnVoteVetoOk;
-        public event Action<string> OnError;
-
         internal AsobiRealtime(AsobiClient client) => _client = client;
+
+        // Test-only: construct without a client/WebSocket so dispatch logic
+        // can be exercised in isolation.
+        internal AsobiRealtime() { }
 
         public async Task ConnectAsync()
         {
@@ -259,7 +234,7 @@ namespace Asobi
                         result = await _ws.ReceiveAsync(new ArraySegment<byte>(buffer), _cts.Token);
                         if (result.MessageType == WebSocketMessageType.Close)
                         {
-                            OnDisconnected?.Invoke(result.CloseStatusDescription);
+                            RaiseDisconnected(result.CloseStatusDescription);
                             return;
                         }
                         sb.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
@@ -271,118 +246,17 @@ namespace Asobi
             catch (OperationCanceledException) { }
             catch (WebSocketException ex)
             {
-                OnDisconnected?.Invoke(ex.Message);
+                RaiseDisconnected(ex.Message);
             }
         }
 
-        void HandleMessage(string raw)
+        protected internal override void OnPendingResponse(string cid, string type, string raw)
         {
-            var msg = JsonUtility.FromJson<WsMessage>(raw);
-            if (msg == null) return;
-
-            // Handle request/response via cid
-            if (!string.IsNullOrEmpty(msg.cid) && _pending.TryRemove(msg.cid, out var tcs))
-            {
-                if (msg.type == "error")
-                    tcs.SetException(new AsobiException(-1, msg.payload));
-                else
-                    tcs.SetResult(raw);
-            }
-
-            // Dispatch events
-            switch (msg.type)
-            {
-                case "session.connected":
-                    OnConnected?.Invoke();
-                    break;
-                case "match.state":
-                    OnMatchState?.Invoke(raw);
-                    break;
-                case "chat.message":
-                    OnChatMessage?.Invoke(raw);
-                    break;
-                case "notification.new":
-                    OnNotification?.Invoke(raw);
-                    break;
-                case "matchmaker.matched":
-                case "match.matched":
-                    OnMatchmakerMatched?.Invoke(raw);
-                    break;
-                case "match.vote_start":
-                    OnVoteStart?.Invoke(raw);
-                    break;
-                case "match.vote_tally":
-                    OnVoteTally?.Invoke(raw);
-                    break;
-                case "match.vote_result":
-                    OnVoteResult?.Invoke(raw);
-                    break;
-                case "match.vote_vetoed":
-                    OnVoteVetoed?.Invoke(raw);
-                    break;
-                case "world.tick":
-                    OnWorldTick?.Invoke(raw);
-                    break;
-                case "world.terrain":
-                    OnWorldTerrain?.Invoke(raw);
-                    break;
-                case "world.joined":
-                    OnWorldJoined?.Invoke(raw);
-                    break;
-                case "world.left":
-                    OnWorldLeft?.Invoke(raw);
-                    break;
-                case "match.joined":
-                    OnMatchJoined?.Invoke(raw);
-                    break;
-                case "match.left":
-                    OnMatchLeft?.Invoke(raw);
-                    break;
-                case "chat.joined":
-                    OnChatJoined?.Invoke(raw);
-                    break;
-                case "chat.left":
-                    OnChatLeft?.Invoke(raw);
-                    break;
-                case "matchmaker.queued":
-                    OnMatchmakerQueued?.Invoke(raw);
-                    break;
-                case "matchmaker.removed":
-                    OnMatchmakerRemoved?.Invoke(raw);
-                    break;
-                case "vote.cast_ok":
-                    OnVoteCastOk?.Invoke(raw);
-                    break;
-                case "vote.veto_ok":
-                    OnVoteVetoOk?.Invoke(raw);
-                    break;
-                case "dm.message":
-                    OnDmMessage?.Invoke(raw);
-                    break;
-                case "dm.sent":
-                    OnDmSent?.Invoke(raw);
-                    break;
-                case "presence.updated":
-                    OnPresenceUpdated?.Invoke(raw);
-                    break;
-                case "session.heartbeat":
-                    break;
-                case "error":
-                    OnError?.Invoke(raw);
-                    break;
-                default:
-                    if (msg.type != null && msg.type.StartsWith("match."))
-                    {
-                        var eventName = msg.type.Substring(6);
-                        OnMatchEvent?.Invoke(eventName, raw);
-                    }
-                    else if (msg.type != null && msg.type.StartsWith("world."))
-                    {
-                        var eventName = msg.type.Substring(6);
-                        OnWorldEvent?.Invoke(eventName, raw);
-                    }
-                    break;
-            }
+            if (!_pending.TryRemove(cid, out var tcs)) return;
+            if (type == "error")
+                tcs.SetException(new AsobiException(-1, raw));
+            else
+                tcs.SetResult(raw);
         }
 
         public void Dispose()

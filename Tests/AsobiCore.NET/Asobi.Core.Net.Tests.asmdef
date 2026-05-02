@@ -1,0 +1,18 @@
+{
+  "name": "Asobi.Core.Net.Tests",
+  "rootNamespace": "Asobi.Tests",
+  "references": [],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "ASOBI_NET_STANDALONE_BUILD"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": true
+}
