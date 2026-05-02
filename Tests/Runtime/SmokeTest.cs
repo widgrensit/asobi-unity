@@ -53,8 +53,8 @@ namespace Asobi.Tests
             // match.matched listeners BEFORE queueing to avoid races.
             var matchedA = new TaskCompletionSource<string>();
             var matchedB = new TaskCompletionSource<string>();
-            a.client.Realtime.OnMatchmakerMatched += p => matchedA.TrySetResult(p.match_id);
-            b.client.Realtime.OnMatchmakerMatched += p => matchedB.TrySetResult(p.match_id);
+            a.client.Realtime.OnMatchmakerMatched += raw => matchedA.TrySetResult(JsonHelper.ExtractJsonField(raw, "match_id"));
+            b.client.Realtime.OnMatchmakerMatched += raw => matchedB.TrySetResult(JsonHelper.ExtractJsonField(raw, "match_id"));
 
             await a.client.Matchmaker.AddAsync(MatchMode);
             await b.client.Matchmaker.AddAsync(MatchMode);
@@ -70,18 +70,22 @@ namespace Asobi.Tests
                 throw new Exception($"match_id mismatch: {matchedA.Task.Result} vs {matchedB.Task.Result}");
             Log($"Both matched, match_id = {matchedA.Task.Result}");
 
-            var stateTcs = new TaskCompletionSource<float>();
-            a.client.Realtime.OnMatchState += state =>
+            var stateTcs = new TaskCompletionSource<string>();
+            var playerKey = "\"" + a.client.PlayerId + "\"";
+            a.client.Realtime.OnMatchState += raw =>
             {
-                if (state.players != null
-                    && state.players.TryGetValue(a.client.PlayerId, out var me)
-                    && me.x >= 1f)
+                if (!raw.Contains(playerKey)) return;
+                var idx = raw.IndexOf(playerKey, StringComparison.Ordinal);
+                var xField = JsonHelper.ExtractJsonField(raw.Substring(idx), "x");
+                if (xField != null
+                    && float.TryParse(xField, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var xVal)
+                    && xVal >= 1f)
                 {
-                    stateTcs.TrySetResult(me.x);
+                    stateTcs.TrySetResult(xField);
                 }
             };
 
-            a.client.Realtime.SendMatchInput(new MatchInput { move_x = 1, move_y = 0 });
+            await a.client.Realtime.SendMatchInputAsync("{\"move_x\":1,\"move_y\":0}");
 
             var stateTimeout = Task.Delay(TimeSpan.FromSeconds(StateTimeoutSec));
             var stateWinner = await Task.WhenAny(stateTcs.Task, stateTimeout);
@@ -89,8 +93,8 @@ namespace Asobi.Tests
                 throw new Exception("timeout waiting for match.state with input applied");
 
             Log($"match.state confirmed: x = {stateTcs.Task.Result}");
-            a.client.Realtime.Disconnect();
-            b.client.Realtime.Disconnect();
+            await a.client.Realtime.DisconnectAsync();
+            await b.client.Realtime.DisconnectAsync();
             Log("PASS");
         }
 
