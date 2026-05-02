@@ -1,0 +1,25 @@
+name: Dispatch
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  dispatch:
+    name: Protocol dispatch (.NET, no Unity license)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore Tests/AsobiCore.NET/Asobi.Core.Tests.csproj
+
+      - name: Test
+        run: dotnet test Tests/AsobiCore.NET/Asobi.Core.Tests.csproj --no-restore --logger "console;verbosity=normal"
