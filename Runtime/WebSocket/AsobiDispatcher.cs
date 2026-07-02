@@ -11,9 +11,9 @@ namespace Asobi
         public event Action<string> OnChatMessage;
         public event Action<string> OnNotification;
         public event Action<string> OnMatchmakerMatched;
-        public event Action<string> OnVoteStart;
+        public event Action<string> OnVoteStarted;
         public event Action<string> OnVoteTally;
-        public event Action<string> OnVoteResult;
+        public event Action<string> OnVoteResolved;
         public event Action<string> OnVoteVetoed;
         public event Action<string> OnWorldTick;
         public event Action<string> OnWorldTerrain;
@@ -82,14 +82,14 @@ namespace Asobi
                 case "match.matchmaker_failed":
                     OnMatchmakerFailed?.Invoke(raw);
                     break;
-                case "match.vote_start":
-                    OnVoteStart?.Invoke(raw);
+                case "match.vote_started":
+                    OnVoteStarted?.Invoke(raw);
                     break;
                 case "match.vote_tally":
                     OnVoteTally?.Invoke(raw);
                     break;
-                case "match.vote_result":
-                    OnVoteResult?.Invoke(raw);
+                case "match.vote_resolved":
+                    OnVoteResolved?.Invoke(raw);
                     break;
                 case "match.vote_vetoed":
                     OnVoteVetoed?.Invoke(raw);
