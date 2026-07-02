@@ -7,14 +7,16 @@ namespace Asobi
         readonly AsobiClient _client;
         internal AsobiVotes(AsobiClient client) => _client = client;
 
-        public async Task<string> ListForMatchAsync(string matchId)
+        public async Task<VoteListResponse> ListForMatchAsync(string matchId)
         {
-            return await _client.Http.GetRaw($"/api/v1/matches/{matchId}/votes");
+            var raw = await _client.Http.GetRaw($"/api/v1/matches/{matchId}/votes");
+            return JsonHelper.ParseVoteList(raw);
         }
 
-        public async Task<string> GetAsync(string voteId)
+        public async Task<Vote> GetAsync(string voteId)
         {
-            return await _client.Http.GetRaw($"/api/v1/votes/{voteId}");
+            var raw = await _client.Http.GetRaw($"/api/v1/votes/{voteId}");
+            return JsonHelper.ParseVote(raw);
         }
     }
 }
