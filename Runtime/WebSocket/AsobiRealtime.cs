@@ -14,6 +14,7 @@ namespace Asobi
         ClientWebSocket _ws;
         CancellationTokenSource _cts;
         int _cidCounter;
+        string _revokedToken;
         readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _pending = new();
 
         public bool IsConnected => _ws?.State == WebSocketState.Open;
@@ -27,6 +28,8 @@ namespace Asobi
         public async Task ConnectAsync()
         {
             if (IsConnected) return;
+            if (_revokedToken != null && _revokedToken == _client.AccessToken)
+                throw new AsobiException(-1, "session_revoked: access token was revoked; re-authenticate before connecting");
 
             _ws = new ClientWebSocket();
             _cts = new CancellationTokenSource();
@@ -34,8 +37,23 @@ namespace Asobi
             await _ws.ConnectAsync(new Uri(_client.Config.WsUrl), _cts.Token);
             _ = ReceiveLoop();
 
-            var payload = JsonUtility.ToJson(new WsConnectPayload { token = _client.SessionToken });
+            var payload = JsonUtility.ToJson(new WsConnectPayload { token = _client.AccessToken });
             await SendAsync("session.connect", payload);
+        }
+
+        public async Task ReauthenticateAsync()
+        {
+            if (!IsConnected) return;
+            var payload = JsonUtility.ToJson(new WsConnectPayload { token = _client.AccessToken });
+            await SendAsync("session.connect", payload);
+        }
+
+        internal void OnAccessTokenRotated()
+        {
+            if (_revokedToken != null && _revokedToken != _client?.AccessToken)
+                _revokedToken = null;
+            if (IsConnected)
+                _ = ReauthenticateAsync();
         }
 
         public Task<string> SendHeartbeatAsync()
@@ -234,13 +252,17 @@ namespace Asobi
                         result = await _ws.ReceiveAsync(new ArraySegment<byte>(buffer), _cts.Token);
                         if (result.MessageType == WebSocketMessageType.Close)
                         {
+                            if (IsRevocationReason(result.CloseStatusDescription))
+                                _revokedToken = _client?.AccessToken;
                             RaiseDisconnected(result.CloseStatusDescription);
                             return;
                         }
                         sb.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
                     } while (!result.EndOfMessage);
 
-                    HandleMessage(sb.ToString());
+                    var msg = sb.ToString();
+                    CheckForRevocation(msg);
+                    HandleMessage(msg);
                 }
             }
             catch (OperationCanceledException) { }
@@ -249,6 +271,18 @@ namespace Asobi
                 RaiseDisconnected(ex.Message);
             }
         }
+
+        void CheckForRevocation(string raw)
+        {
+            var env = ProtocolEnvelope.Parse(raw);
+            if (env.Type != "error") return;
+            var reason = JsonHelper.ExtractJsonField(raw, "reason");
+            if (IsRevocationReason(reason))
+                _revokedToken = _client?.AccessToken;
+        }
+
+        static bool IsRevocationReason(string text)
+            => text != null && (text.Contains("invalid_token") || text.Contains("session_revoked"));
 
         protected internal override void OnPendingResponse(string cid, string type, string raw)
         {

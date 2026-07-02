@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using UnityEngine;
 
 namespace Asobi
@@ -25,20 +26,41 @@ namespace Asobi
 
         internal HttpClient Http { get; }
 
-        string _sessionToken;
+        const string RefreshTokenPrefKey = "asobi.refresh_token";
 
-        public string SessionToken
+        string _accessToken;
+        string _refreshToken;
+
+        public event Action OnAuthExpired;
+
+        public string AccessToken
         {
-            get => _sessionToken;
+            get => _accessToken;
             internal set
             {
-                _sessionToken = value;
-                Http.SessionToken = value;
+                _accessToken = value;
+                Http.AccessToken = value;
+                if (!string.IsNullOrEmpty(value))
+                    Realtime?.OnAccessTokenRotated();
+            }
+        }
+
+        public string RefreshToken
+        {
+            get => _refreshToken;
+            internal set
+            {
+                _refreshToken = value;
+                if (string.IsNullOrEmpty(value))
+                    PlayerPrefs.DeleteKey(RefreshTokenPrefKey);
+                else
+                    PlayerPrefs.SetString(RefreshTokenPrefKey, value);
+                PlayerPrefs.Save();
             }
         }
 
         public string PlayerId { get; internal set; }
-        public bool IsAuthenticated => !string.IsNullOrEmpty(SessionToken);
+        public bool IsAuthenticated => !string.IsNullOrEmpty(AccessToken);
 
         public AsobiClient(string host, int port = 8084, bool useSsl = false)
             : this(new AsobiConfig(host, port, useSsl)) { }
@@ -47,6 +69,10 @@ namespace Asobi
         {
             Config = config;
             Http = new HttpClient(config.BaseUrl);
+            Http.RefreshHandler = HandleTokenRefreshAsync;
+            _refreshToken = PlayerPrefs.HasKey(RefreshTokenPrefKey)
+                ? PlayerPrefs.GetString(RefreshTokenPrefKey)
+                : null;
 
             Auth = new AsobiAuth(this);
             Players = new AsobiPlayers(this);
@@ -64,6 +90,34 @@ namespace Asobi
             Worlds = new AsobiWorlds(this);
             DirectMessages = new AsobiDirectMessages(this);
             Realtime = new AsobiRealtime(this);
+        }
+
+        async Task<bool> HandleTokenRefreshAsync()
+        {
+            if (string.IsNullOrEmpty(RefreshToken))
+            {
+                SurfaceAuthExpired();
+                return false;
+            }
+
+            try
+            {
+                await Auth.RefreshAsync();
+                return true;
+            }
+            catch (AsobiException)
+            {
+                SurfaceAuthExpired();
+                return false;
+            }
+        }
+
+        void SurfaceAuthExpired()
+        {
+            AccessToken = null;
+            RefreshToken = null;
+            PlayerId = null;
+            OnAuthExpired?.Invoke();
         }
 
         public void Dispose()

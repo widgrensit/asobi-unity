@@ -10,7 +10,10 @@ namespace Asobi
     internal class HttpClient
     {
         readonly string _baseUrl;
-        public string SessionToken { get; set; }
+        readonly object _refreshLock = new object();
+        Task<bool> _refreshInFlight;
+        public string AccessToken { get; set; }
+        public Func<Task<bool>> RefreshHandler { get; set; }
 
         public HttpClient(string baseUrl)
         {
@@ -18,148 +21,132 @@ namespace Asobi
         }
 
         public Task<T> Get<T>(string path, Dictionary<string, string> query = null)
-        {
-            var url = BuildUrl(path, query);
-            return Send<T>(UnityWebRequest.Get(url));
-        }
+            => Send<T>(new RequestSpec("GET", path, BuildUrl(path, query)));
 
         public Task<T> Post<T>(string path, object body = null)
-        {
-            var url = BuildUrl(path);
-            var req = new UnityWebRequest(url, "POST");
-            if (body != null)
-            {
-                var json = JsonUtility.ToJson(body);
-                req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
-                req.SetRequestHeader("Content-Type", "application/json");
-            }
-            req.downloadHandler = new DownloadHandlerBuffer();
-            return Send<T>(req);
-        }
+            => Send<T>(JsonSpec("POST", path, body));
 
         public Task<T> PostJson<T>(string path, string json)
-        {
-            var url = BuildUrl(path);
-            var req = new UnityWebRequest(url, "POST");
-            req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
-            req.downloadHandler = new DownloadHandlerBuffer();
-            req.SetRequestHeader("Content-Type", "application/json");
-            return Send<T>(req);
-        }
+            => Send<T>(RawSpec("POST", path, json));
 
         public Task<T> Put<T>(string path, object body = null)
-        {
-            var url = BuildUrl(path);
-            var req = new UnityWebRequest(url, "PUT");
-            if (body != null)
-            {
-                var json = JsonUtility.ToJson(body);
-                req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
-                req.SetRequestHeader("Content-Type", "application/json");
-            }
-            req.downloadHandler = new DownloadHandlerBuffer();
-            return Send<T>(req);
-        }
+            => Send<T>(JsonSpec("PUT", path, body));
 
         public Task<T> PutJson<T>(string path, string json)
-        {
-            var url = BuildUrl(path);
-            var req = new UnityWebRequest(url, "PUT");
-            req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
-            req.downloadHandler = new DownloadHandlerBuffer();
-            req.SetRequestHeader("Content-Type", "application/json");
-            return Send<T>(req);
-        }
+            => Send<T>(RawSpec("PUT", path, json));
 
         public Task<string> GetRaw(string path, Dictionary<string, string> query = null)
-        {
-            var url = BuildUrl(path, query);
-            return SendRaw(UnityWebRequest.Get(url));
-        }
+            => SendRaw(new RequestSpec("GET", path, BuildUrl(path, query)));
 
         public Task<string> PutRaw(string path, string json)
-        {
-            var url = BuildUrl(path);
-            var req = new UnityWebRequest(url, "PUT");
-            req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
-            req.downloadHandler = new DownloadHandlerBuffer();
-            req.SetRequestHeader("Content-Type", "application/json");
-            return SendRaw(req);
-        }
+            => SendRaw(RawSpec("PUT", path, json));
 
         public Task<AsobiResponse> Delete(string path, object body = null, Dictionary<string, string> query = null)
         {
-            var url = BuildUrl(path, query);
-            var req = new UnityWebRequest(url, "DELETE");
+            var spec = new RequestSpec("DELETE", path, BuildUrl(path, query));
             if (body != null)
             {
-                var json = JsonUtility.ToJson(body);
-                req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
-                req.SetRequestHeader("Content-Type", "application/json");
+                spec.Body = Encoding.UTF8.GetBytes(JsonUtility.ToJson(body));
+                spec.ContentType = "application/json";
             }
-            req.downloadHandler = new DownloadHandlerBuffer();
-            return Send<AsobiResponse>(req);
+            return Send<AsobiResponse>(spec);
         }
 
-        async Task<string> SendRaw(UnityWebRequest req)
+        RequestSpec JsonSpec(string method, string path, object body)
         {
-            if (!string.IsNullOrEmpty(SessionToken))
-                req.SetRequestHeader("Authorization", $"Bearer {SessionToken}");
-
-            var op = req.SendWebRequest();
-
-            while (!op.isDone)
-                await Task.Yield();
-
-            if (req.result == UnityWebRequest.Result.ConnectionError)
-                throw new AsobiException(-1, $"Connection error: {req.error}");
-
-            var responseText = req.downloadHandler?.text;
-
-            if (req.responseCode >= 400)
+            var spec = new RequestSpec(method, path, BuildUrl(path));
+            if (body != null)
             {
-                AsobiError error = null;
-                try { error = JsonUtility.FromJson<AsobiError>(responseText); } catch { }
-                throw new AsobiException(
-                    (int)req.responseCode,
-                    error?.error ?? $"HTTP {req.responseCode}",
-                    error
-                );
+                spec.Body = Encoding.UTF8.GetBytes(JsonUtility.ToJson(body));
+                spec.ContentType = "application/json";
             }
-
-            return responseText;
+            return spec;
         }
 
-        async Task<T> Send<T>(UnityWebRequest req)
-        {
-            if (!string.IsNullOrEmpty(SessionToken))
-                req.SetRequestHeader("Authorization", $"Bearer {SessionToken}");
-
-            var op = req.SendWebRequest();
-
-            while (!op.isDone)
-                await Task.Yield();
-
-            if (req.result == UnityWebRequest.Result.ConnectionError)
-                throw new AsobiException(-1, $"Connection error: {req.error}");
-
-            var responseText = req.downloadHandler?.text;
-
-            if (req.responseCode >= 400)
+        RequestSpec RawSpec(string method, string path, string json)
+            => new RequestSpec(method, path, BuildUrl(path))
             {
-                AsobiError error = null;
-                try { error = JsonUtility.FromJson<AsobiError>(responseText); } catch { }
-                throw new AsobiException(
-                    (int)req.responseCode,
-                    error?.error ?? $"HTTP {req.responseCode}",
-                    error
-                );
+                Body = Encoding.UTF8.GetBytes(json),
+                ContentType = "application/json"
+            };
+
+        async Task<string> SendRaw(RequestSpec spec)
+        {
+            var (code, text, connError) = await SendOnce(spec);
+            if (connError != null)
+                throw new AsobiException(-1, $"Connection error: {connError}");
+
+            if (code == 401 && ShouldAttemptRefresh(spec.Path) && RefreshHandler != null)
+            {
+                if (await TryRefresh())
+                {
+                    (code, text, connError) = await SendOnce(spec);
+                    if (connError != null)
+                        throw new AsobiException(-1, $"Connection error: {connError}");
+                }
             }
 
+            ThrowIfError(code, text);
+            return text;
+        }
+
+        async Task<T> Send<T>(RequestSpec spec)
+        {
+            var responseText = await SendRaw(spec);
             if (string.IsNullOrEmpty(responseText))
                 return default;
-
             return JsonUtility.FromJson<T>(responseText);
+        }
+
+        Task<bool> TryRefresh()
+        {
+            lock (_refreshLock)
+                _refreshInFlight ??= RunRefresh();
+            return _refreshInFlight;
+        }
+
+        async Task<bool> RunRefresh()
+        {
+            try { return await RefreshHandler(); }
+            catch { return false; }
+            finally
+            {
+                lock (_refreshLock)
+                    _refreshInFlight = null;
+            }
+        }
+
+        async Task<(long code, string text, string connError)> SendOnce(RequestSpec spec)
+        {
+            var req = new UnityWebRequest(spec.Url, spec.Method);
+            req.downloadHandler = new DownloadHandlerBuffer();
+            if (spec.Body != null)
+            {
+                req.uploadHandler = new UploadHandlerRaw(spec.Body);
+                req.SetRequestHeader("Content-Type", spec.ContentType ?? "application/json");
+            }
+            if (!string.IsNullOrEmpty(AccessToken))
+                req.SetRequestHeader("Authorization", $"Bearer {AccessToken}");
+
+            var op = req.SendWebRequest();
+            while (!op.isDone)
+                await Task.Yield();
+
+            if (req.result == UnityWebRequest.Result.ConnectionError)
+                return (0, null, req.error);
+
+            return (req.responseCode, req.downloadHandler?.text, null);
+        }
+
+        static bool ShouldAttemptRefresh(string path)
+            => !string.IsNullOrEmpty(path) && !path.Contains("/auth/");
+
+        static void ThrowIfError(long code, string responseText)
+        {
+            if (code < 400) return;
+            AsobiError error = null;
+            try { error = JsonUtility.FromJson<AsobiError>(responseText); } catch { }
+            throw new AsobiException((int)code, error?.error ?? $"HTTP {code}", error);
         }
 
         string BuildUrl(string path, Dictionary<string, string> query = null)
@@ -181,6 +168,22 @@ namespace Asobi
                 url = sb.ToString();
             }
             return url;
+        }
+    }
+
+    internal class RequestSpec
+    {
+        public string Method;
+        public string Path;
+        public string Url;
+        public byte[] Body;
+        public string ContentType;
+
+        public RequestSpec(string method, string path, string url)
+        {
+            Method = method;
+            Path = path;
+            Url = url;
         }
     }
 

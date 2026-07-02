@@ -14,7 +14,8 @@ namespace Asobi
     public class AuthResponse
     {
         public string player_id;
-        public string session_token;
+        public string access_token;
+        public string refresh_token;
         public string username;
     }
 
@@ -29,7 +30,8 @@ namespace Asobi
     public class OAuthResponse
     {
         public string player_id;
-        public string session_token;
+        public string access_token;
+        public string refresh_token;
         public string username;
         public bool created;
     }
@@ -51,13 +53,19 @@ namespace Asobi
     [Serializable]
     public class RefreshRequest
     {
-        public string session_token;
+        public string refresh_token;
     }
 
     [Serializable]
     public class RefreshResponse
     {
-        public string player_id;
-        public string session_token;
+        public string access_token;
+        public string refresh_token;
+    }
+
+    [Serializable]
+    public class LogoutRequest
+    {
+        public string refresh_token;
     }
 }
