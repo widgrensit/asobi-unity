@@ -25,20 +25,35 @@ namespace Asobi
 
         internal HttpClient Http { get; }
 
-        string _sessionToken;
+        const string RefreshTokenKey = "asobi_refresh_token";
 
-        public string SessionToken
+        string _accessToken;
+        string _refreshToken;
+
+        public string AccessToken
         {
-            get => _sessionToken;
+            get => _accessToken;
             internal set
             {
-                _sessionToken = value;
-                Http.SessionToken = value;
+                _accessToken = value;
+                Http.AccessToken = value;
+            }
+        }
+
+        public string RefreshToken
+        {
+            get => _refreshToken;
+            internal set
+            {
+                _refreshToken = value;
+                if (string.IsNullOrEmpty(value)) PlayerPrefs.DeleteKey(RefreshTokenKey);
+                else PlayerPrefs.SetString(RefreshTokenKey, value);
+                PlayerPrefs.Save();
             }
         }
 
         public string PlayerId { get; internal set; }
-        public bool IsAuthenticated => !string.IsNullOrEmpty(SessionToken);
+        public bool IsAuthenticated => !string.IsNullOrEmpty(AccessToken);
 
         public AsobiClient(string host, int port = 8084, bool useSsl = false)
             : this(new AsobiConfig(host, port, useSsl)) { }
@@ -64,6 +79,8 @@ namespace Asobi
             Worlds = new AsobiWorlds(this);
             DirectMessages = new AsobiDirectMessages(this);
             Realtime = new AsobiRealtime(this);
+
+            _refreshToken = PlayerPrefs.GetString(RefreshTokenKey, "");
         }
 
         public void Dispose()
