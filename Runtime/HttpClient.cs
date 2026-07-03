@@ -10,7 +10,7 @@ namespace Asobi
     internal class HttpClient
     {
         readonly string _baseUrl;
-        public string SessionToken { get; set; }
+        public string AccessToken { get; set; }
 
         public HttpClient(string baseUrl)
         {
@@ -103,8 +103,8 @@ namespace Asobi
 
         async Task<string> SendRaw(UnityWebRequest req)
         {
-            if (!string.IsNullOrEmpty(SessionToken))
-                req.SetRequestHeader("Authorization", $"Bearer {SessionToken}");
+            if (!string.IsNullOrEmpty(AccessToken))
+                req.SetRequestHeader("Authorization", $"Bearer {AccessToken}");
 
             var op = req.SendWebRequest();
 
@@ -132,8 +132,8 @@ namespace Asobi
 
         async Task<T> Send<T>(UnityWebRequest req)
         {
-            if (!string.IsNullOrEmpty(SessionToken))
-                req.SetRequestHeader("Authorization", $"Bearer {SessionToken}");
+            if (!string.IsNullOrEmpty(AccessToken))
+                req.SetRequestHeader("Authorization", $"Bearer {AccessToken}");
 
             var op = req.SendWebRequest();
 

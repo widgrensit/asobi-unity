@@ -59,7 +59,7 @@ namespace Asobi
             await _ws.ConnectAsync(new Uri(_client.Config.WsUrl), _cts.Token);
             _ = ReceiveLoop();
 
-            var payload = JsonUtility.ToJson(new WsConnectPayload { token = _client.SessionToken });
+            var payload = JsonUtility.ToJson(new WsConnectPayload { token = _client.AccessToken });
             await SendAsync("session.connect", payload);
         }
 

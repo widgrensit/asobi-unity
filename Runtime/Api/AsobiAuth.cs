@@ -16,7 +16,8 @@ namespace Asobi
                 display_name = displayName ?? username
             };
             var resp = await _client.Http.Post<AuthResponse>("/api/v1/auth/register", req);
-            _client.SessionToken = resp.session_token;
+            _client.AccessToken = resp.access_token;
+            _client.RefreshToken = resp.refresh_token;
             _client.PlayerId = resp.player_id;
             return resp;
         }
@@ -25,7 +26,8 @@ namespace Asobi
         {
             var req = new AuthRequest { username = username, password = password };
             var resp = await _client.Http.Post<AuthResponse>("/api/v1/auth/login", req);
-            _client.SessionToken = resp.session_token;
+            _client.AccessToken = resp.access_token;
+            _client.RefreshToken = resp.refresh_token;
             _client.PlayerId = resp.player_id;
             return resp;
         }
@@ -34,7 +36,8 @@ namespace Asobi
         {
             var req = new OAuthRequest { provider = provider, token = token };
             var resp = await _client.Http.Post<OAuthResponse>("/api/v1/auth/oauth", req);
-            _client.SessionToken = resp.session_token;
+            _client.AccessToken = resp.access_token;
+            _client.RefreshToken = resp.refresh_token;
             _client.PlayerId = resp.player_id;
             return resp;
         }
@@ -56,15 +59,17 @@ namespace Asobi
 
         public async Task<RefreshResponse> RefreshAsync()
         {
-            var req = new RefreshRequest { session_token = _client.SessionToken };
+            var req = new RefreshRequest { refresh_token = _client.RefreshToken };
             var resp = await _client.Http.Post<RefreshResponse>("/api/v1/auth/refresh", req);
-            _client.SessionToken = resp.session_token;
+            _client.AccessToken = resp.access_token;
+            _client.RefreshToken = resp.refresh_token;
             return resp;
         }
 
         public void Logout()
         {
-            _client.SessionToken = null;
+            _client.AccessToken = null;
+            _client.RefreshToken = null;
             _client.PlayerId = null;
         }
     }
