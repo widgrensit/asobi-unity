@@ -59,6 +59,8 @@ namespace Asobi
 
         public async Task<RefreshResponse> RefreshAsync()
         {
+            if (string.IsNullOrEmpty(_client.RefreshToken))
+                throw new AsobiException(-1, "No refresh token available");
             var req = new RefreshRequest { refresh_token = _client.RefreshToken };
             var resp = await _client.Http.Post<RefreshResponse>("/api/v1/auth/refresh", req);
             _client.AccessToken = resp.access_token;

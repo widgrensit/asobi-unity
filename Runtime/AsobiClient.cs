@@ -48,6 +48,7 @@ namespace Asobi
                 _refreshToken = value;
                 if (string.IsNullOrEmpty(value)) PlayerPrefs.DeleteKey(RefreshTokenKey);
                 else PlayerPrefs.SetString(RefreshTokenKey, value);
+                PlayerPrefs.Save();
             }
         }
 
