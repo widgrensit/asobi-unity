@@ -54,6 +54,29 @@ namespace Asobi
             return new MatchListResponse { matches = matches };
         }
 
+        internal static Vote ParseVote(string json)
+        {
+            var vote = JsonUtility.FromJson<Vote>(json);
+            vote.options = ExtractJsonField(json, "options");
+            vote.votes_cast = ExtractJsonField(json, "votes_cast");
+            vote.result = ExtractJsonField(json, "result");
+            vote.distribution = ExtractJsonField(json, "distribution");
+            return vote;
+        }
+
+        internal static VoteListResponse ParseVoteList(string json)
+        {
+            var votesJson = ExtractJsonField(json, "votes");
+            if (string.IsNullOrEmpty(votesJson))
+                return new VoteListResponse { votes = Array.Empty<Vote>() };
+
+            var items = SplitJsonArray(votesJson);
+            var votes = new Vote[items.Length];
+            for (int i = 0; i < items.Length; i++)
+                votes[i] = ParseVote(items[i]);
+            return new VoteListResponse { votes = votes };
+        }
+
         internal static Notification ParseNotification(string json)
         {
             var notif = JsonUtility.FromJson<Notification>(json);
