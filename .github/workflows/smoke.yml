@@ -6,10 +6,29 @@ on:
     branches: [main]
 
 jobs:
+  gate:
+    name: Check Unity license
+    runs-on: ubuntu-24.04
+    outputs:
+      licensed: ${{ steps.check.outputs.licensed }}
+    steps:
+      - id: check
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        run: |
+          if [ -n "$UNITY_LICENSE" ]; then
+            echo "licensed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "licensed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::UNITY_LICENSE secret not set - skipping PlayMode smoke. The license-free .NET dispatch test still gates this PR."
+          fi
+
   smoke:
     name: PlayMode smoke vs sdk_demo_backend
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    needs: gate
+    if: needs.gate.outputs.licensed == 'true'
 
     steps:
       - name: Check out asobi-unity (as embedded package)
