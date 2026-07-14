@@ -17,6 +17,23 @@ namespace Asobi
         public string access_token;
         public string refresh_token;
         public string username;
+        public bool created;
+        public bool guest;
+        public bool upgraded;
+    }
+
+    [Serializable]
+    public class GuestRequest
+    {
+        public string device_id;
+        public string device_secret;
+    }
+
+    [Serializable]
+    public class GuestUpgradeRequest
+    {
+        public string username;
+        public string password;
     }
 
     [Serializable]

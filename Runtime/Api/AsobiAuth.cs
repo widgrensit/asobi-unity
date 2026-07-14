@@ -32,6 +32,26 @@ namespace Asobi
             return resp;
         }
 
+        public async Task<AuthResponse> GuestAsync(string deviceId, string deviceSecret)
+        {
+            var req = new GuestRequest { device_id = deviceId, device_secret = deviceSecret };
+            var resp = await _client.Http.Post<AuthResponse>("/api/v1/auth/guest", req);
+            _client.AccessToken = resp.access_token;
+            _client.RefreshToken = resp.refresh_token;
+            _client.PlayerId = resp.player_id;
+            return resp;
+        }
+
+        public async Task<AuthResponse> UpgradeGuestAsync(string username, string password)
+        {
+            var req = new GuestUpgradeRequest { username = username, password = password };
+            var resp = await _client.Http.Post<AuthResponse>("/api/v1/auth/guest/upgrade", req);
+            _client.AccessToken = resp.access_token;
+            _client.RefreshToken = resp.refresh_token;
+            _client.PlayerId = resp.player_id;
+            return resp;
+        }
+
         public async Task<OAuthResponse> OAuthAsync(string provider, string token)
         {
             var req = new OAuthRequest { provider = provider, token = token };
