@@ -8,7 +8,14 @@ It runs in PlayMode (where the `Tests/Runtime` asmdef lives) but uses `[Test]` (
 
 ## SmokeTest
 
-`SmokeTest.cs` exercises the 3 canonical scenarios (auth + WS, matchmaker → match.matched, input → state) against [asobi-test-harness](https://github.com/widgrensit/asobi-test-harness). It's a Unity Test Framework `UnityTest`.
+`SmokeTest.cs` runs two Unity Test Framework `UnityTest`s against [asobi-test-harness](https://github.com/widgrensit/asobi-test-harness):
+
+- `RunsCanonicalFlow` — the 3 canonical scenarios (auth + WS, matchmaker → match.matched, input → state).
+- `RunsGuestFlow` — guest auth end to end: create → resume (same player) → weak-secret rejection → upgrade.
+
+## AuthModelsTests (license-free)
+
+`Tests/AsobiCore.NET/AuthModelsTests.cs` is a plain .NET (`AsobiCore.NET`) test project that pins the auth wire contract — guest request field names and the `AuthResponse` create/resume/upgrade flag mapping — with no Unity license and no backend. This is the only auth coverage that runs in CI today (see **CI status**). `Tests/Runtime/AuthGuestTests.cs` adds EditMode coverage of the same surface but, like the smoke test, needs a Unity license to run.
 
 ## Running locally
 
@@ -25,7 +32,7 @@ It runs in PlayMode (where the `Tests/Runtime` asmdef lives) but uses `[Test]` (
    "com.asobi.client": "https://github.com/widgrensit/asobi-unity.git"
    ```
 
-3. In Unity, open **Window → General → Test Runner**, select **PlayMode**, find `Asobi.Tests.SmokeTest.RunsCanonicalFlow`, and run it.
+3. In Unity, open **Window → General → Test Runner**, select **PlayMode**, and run `Asobi.Tests.SmokeTest.RunsCanonicalFlow` and `Asobi.Tests.SmokeTest.RunsGuestFlow`.
 
 Alternatively from the CLI:
 
@@ -38,7 +45,7 @@ Unity -batchmode -nographics -runTests \
 
 ## CI status
 
-No CI job yet. Running Unity Test Framework in CI requires:
+The license-free `AsobiCore.NET` tests (dispatch + `AuthModelsTests`) run in CI on every push. The Unity Test Framework tests (the PlayMode smoke and the EditMode `AuthGuestTests`) have no CI job yet — running them requires:
 - A Unity license (Personal or Pro), activated via `UNITY_LICENSE`/`UNITY_EMAIL`/`UNITY_PASSWORD` secrets.
 - The `game-ci/unity-test-runner` action, wired to a test-only Unity project that pulls this package.
 
