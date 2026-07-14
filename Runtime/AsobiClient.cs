@@ -23,7 +23,7 @@ namespace Asobi
         public AsobiDirectMessages DirectMessages { get; }
         public AsobiRealtime Realtime { get; }
 
-        internal HttpClient Http { get; }
+        internal IHttpClient Http { get; }
 
         const string RefreshTokenKey = "asobi_refresh_token";
 
@@ -59,9 +59,12 @@ namespace Asobi
             : this(new AsobiConfig(host, port, useSsl)) { }
 
         public AsobiClient(AsobiConfig config)
+            : this(config, new HttpClient(config.BaseUrl)) { }
+
+        internal AsobiClient(AsobiConfig config, IHttpClient http)
         {
             Config = config;
-            Http = new HttpClient(config.BaseUrl);
+            Http = http;
 
             Auth = new AsobiAuth(this);
             Players = new AsobiPlayers(this);

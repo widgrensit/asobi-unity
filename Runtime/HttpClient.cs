@@ -7,7 +7,7 @@ using UnityEngine.Networking;
 
 namespace Asobi
 {
-    internal class HttpClient
+    internal class HttpClient : IHttpClient
     {
         readonly string _baseUrl;
         public string AccessToken { get; set; }
