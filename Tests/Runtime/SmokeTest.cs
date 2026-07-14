@@ -37,6 +37,67 @@ namespace Asobi.Tests
             if (task.IsFaulted) throw task.Exception!;
         }
 
+        [UnityTest]
+        public IEnumerator RunsGuestFlow()
+        {
+            var task = RunGuestFlow();
+            while (!task.IsCompleted) yield return null;
+            if (task.IsFaulted) throw task.Exception!;
+        }
+
+        private static async Task RunGuestFlow()
+        {
+            var (host, port, useSsl) = ParseUrl(
+                Environment.GetEnvironmentVariable("ASOBI_URL") ?? "http://localhost:8084"
+            );
+            Log($"Waiting for backend at {host}:{port}");
+            await WaitForServer(host, port, useSsl);
+
+            var deviceId = $"smoke_device_{DateTime.UtcNow.Ticks}";
+            var deviceSecret = GenerateDeviceSecret();
+
+            var client = new AsobiClient(host, port: port);
+            var created = await client.Auth.GuestAsync(deviceId, deviceSecret);
+            if (!created.created) throw new Exception("expected created:true on first guest sign-in");
+            if (!created.guest) throw new Exception("expected guest:true on guest sign-in");
+            if (string.IsNullOrEmpty(client.AccessToken)) throw new Exception("guest tokens not stored on client");
+            var playerId = created.player_id;
+            Log($"Guest created: {playerId}");
+
+            // Fresh client + same device credentials must resume the same guest.
+            var resumeClient = new AsobiClient(host, port: port);
+            var resumed = await resumeClient.Auth.GuestAsync(deviceId, deviceSecret);
+            if (resumed.created) throw new Exception("resume must not report created:true");
+            if (resumed.player_id != playerId)
+                throw new Exception($"resume player_id mismatch: {resumed.player_id} vs {playerId}");
+            Log("Guest resumed on fresh client.");
+
+            // Weak secret is rejected.
+            var weakClient = new AsobiClient(host, port: port);
+            var rejected = false;
+            try { await weakClient.Auth.GuestAsync($"smoke_weak_{DateTime.UtcNow.Ticks}", "short"); }
+            catch (AsobiException e) when (e.StatusCode == 400) { rejected = true; }
+            if (!rejected) throw new Exception("weak device_secret should be rejected with HTTP 400");
+            Log("Weak secret rejected.");
+
+            // Claim a permanent account; tokens must be replaced with the upgraded pair.
+            var username = $"claimed_{DateTime.UtcNow.Ticks}";
+            var upgraded = await client.Auth.UpgradeGuestAsync(username, "smoke_pw_12345");
+            if (!upgraded.upgraded) throw new Exception("expected upgraded:true");
+            if (upgraded.player_id != playerId) throw new Exception("upgrade must preserve player_id");
+            if (client.AccessToken != upgraded.access_token)
+                throw new Exception("upgraded tokens not stored on client");
+            Log("GUEST PASS");
+        }
+
+        private static string GenerateDeviceSecret()
+        {
+            var bytes = new byte[32];
+            using var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
+            rng.GetBytes(bytes);
+            return Convert.ToBase64String(bytes);
+        }
+
         private static async Task RunFlow()
         {
             var (host, port, useSsl) = ParseUrl(
