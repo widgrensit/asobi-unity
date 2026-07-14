@@ -55,11 +55,36 @@ await client.Matchmaker.AddAsync("demo");
 
 > ⚠️ **Threading**: realtime events fire on a background thread. Marshal to the main thread before touching `UnityEngine.Object` (see the demo's `UnityMainThread` helper). A future SDK version will own this dispatch.
 
+### Guest / anonymous auth
+
+Sign a player in without a username or password. Generate a device id and a
+device secret (>= 32 CSPRNG bytes, base64-encoded) once, persist them on the
+device, and reuse them to resume the same guest.
+
+```csharp
+using Asobi;
+
+var client = new AsobiClient("localhost", port: 8084);
+
+// deviceId + deviceSecret are yours to generate and persist. The secret
+// must be the base64 of at least 32 cryptographically random bytes.
+var resp = await client.Auth.GuestAsync(deviceId, deviceSecret);
+if (resp.created)
+    Debug.Log($"New guest {resp.player_id}");
+else
+    Debug.Log($"Resumed guest {resp.player_id}");
+
+// Later, let the guest claim a permanent account. Uses the current
+// access token and replaces the stored tokens with the upgraded pair.
+var upgraded = await client.Auth.UpgradeGuestAsync("player1", "secret123");
+Debug.Log($"Upgraded: {upgraded.upgraded}");
+```
+
 See the [WebSocket protocol guide](https://github.com/widgrensit/asobi/blob/main/guides/websocket-protocol.md) for the full event surface.
 
 ## Features
 
-- **Auth** — Register, login, OAuth, provider linking, token refresh
+- **Auth** — Register, login, guest (anonymous device create-or-resume + upgrade), OAuth, provider linking, token refresh
 - **Players** — Profiles, updates
 - **Matchmaker** — Queue, status, cancel
 - **Matches** — List, details
