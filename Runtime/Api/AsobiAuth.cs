@@ -88,7 +88,43 @@ namespace Asobi
             return resp;
         }
 
-        public void Logout()
+        /// <summary>
+        /// Logs out on the server and clears local session state.
+        /// </summary>
+        /// <remarks>
+        /// POST /api/v1/auth/logout revokes the whole refresh-token family and
+        /// the presented access token. Clearing the fields locally does not:
+        /// the refresh token stays valid for its full lifetime, so anyone
+        /// holding it can mint new sessions after the user has "logged out".
+        ///
+        /// Local state is cleared even if the request fails, so a user can
+        /// still log out while offline.
+        /// </remarks>
+        public async Task LogoutAsync()
+        {
+            var refreshToken = _client.RefreshToken;
+            if (!string.IsNullOrEmpty(refreshToken))
+            {
+                try
+                {
+                    var req = new RefreshRequest { refresh_token = refreshToken };
+                    await _client.Http.Post<AsobiResponse>("/api/v1/auth/logout", req);
+                }
+                catch (AsobiException)
+                {
+                    // Already-revoked or unreachable server must not strand the
+                    // user in a logged-in client.
+                }
+            }
+            ClearSession();
+        }
+
+        [System.Obsolete(
+            "Logout() only clears local tokens - the server-side refresh family stays valid. Use LogoutAsync()."
+        )]
+        public void Logout() => ClearSession();
+
+        void ClearSession()
         {
             _client.AccessToken = null;
             _client.RefreshToken = null;

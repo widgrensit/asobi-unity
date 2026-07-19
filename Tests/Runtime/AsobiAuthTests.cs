@@ -96,6 +96,51 @@ namespace Asobi.Tests
             Assert.That(_client.AccessToken, Is.Null);
         }
 
+        [Test]
+        public async Task LogoutAsyncRevokesServerSideThenClears()
+        {
+            _client.AccessToken = "at";
+            _client.RefreshToken = "rt";
+            _client.PlayerId = "pid";
+            _http.NextResponse = new AsobiResponse();
+
+            await _client.Auth.LogoutAsync();
+
+            Assert.That(_http.LastPath, Is.EqualTo("/api/v1/auth/logout"));
+            var body = (RefreshRequest)_http.LastBody;
+            Assert.That(body.refresh_token, Is.EqualTo("rt"));
+            Assert.That(_client.AccessToken, Is.Null);
+            Assert.That(_client.RefreshToken, Is.Null);
+            Assert.That(_client.PlayerId, Is.Null);
+        }
+
+        [Test]
+        public async Task LogoutAsyncClearsEvenWhenServerCallFails()
+        {
+            // An unreachable server must not strand the user in a client that
+            // still believes it is logged in.
+            _client.AccessToken = "at";
+            _client.RefreshToken = "rt";
+            _http.NextError = new AsobiException(500, "boom");
+
+            await _client.Auth.LogoutAsync();
+
+            Assert.That(_client.AccessToken, Is.Null);
+            Assert.That(_client.RefreshToken, Is.Null);
+        }
+
+        [Test]
+        public async Task LogoutAsyncWithoutRefreshTokenSkipsTheCall()
+        {
+            _client.AccessToken = "at";
+            _client.RefreshToken = null;
+
+            await _client.Auth.LogoutAsync();
+
+            Assert.That(_http.LastPath, Is.Null, "nothing to revoke, so no request");
+            Assert.That(_client.AccessToken, Is.Null);
+        }
+
         class FakeHttpClient : IHttpClient
         {
             public string AccessToken { get; set; }
