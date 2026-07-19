@@ -22,6 +22,20 @@ namespace Asobi
             return JsonHelper.ParseMatchList(raw);
         }
 
+        public Task<LiveMatchListResponse> ListLiveAsync(string mode = null, bool? hasCapacity = null)
+        {
+            Dictionary<string, string> query = null;
+            if (mode != null || hasCapacity.HasValue)
+            {
+                query = new Dictionary<string, string>();
+                if (mode != null)
+                    query["mode"] = mode;
+                if (hasCapacity.HasValue)
+                    query["has_capacity"] = hasCapacity.Value.ToString().ToLower();
+            }
+            return _client.Http.Get<LiveMatchListResponse>("/api/v1/matches/live", query);
+        }
+
         public async Task<MatchRecord> GetAsync(string matchId)
         {
             var raw = await _client.Http.GetRaw($"/api/v1/matches/{matchId}");

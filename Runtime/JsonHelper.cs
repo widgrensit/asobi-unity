@@ -35,9 +35,7 @@ namespace Asobi
         internal static MatchRecord ParseMatchRecord(string json)
         {
             var record = JsonUtility.FromJson<MatchRecord>(json);
-            record.players = ExtractJsonField(json, "players");
             record.result = ExtractJsonField(json, "result");
-            record.metadata = ExtractJsonField(json, "metadata");
             return record;
         }
 
@@ -52,6 +50,13 @@ namespace Asobi
             for (int i = 0; i < items.Length; i++)
                 matches[i] = ParseMatchRecord(items[i]);
             return new MatchListResponse { matches = matches };
+        }
+
+        internal static Player ParsePlayer(string json)
+        {
+            var player = JsonUtility.FromJson<Player>(json);
+            player.metadata = ExtractJsonField(json, "metadata");
+            return player;
         }
 
         internal static Vote ParseVote(string json)

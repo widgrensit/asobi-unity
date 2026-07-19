@@ -10,7 +10,6 @@ namespace Asobi
         public long score;
         public long sub_score;
         public int rank;
-        public string metadata;
         public string updated_at;
     }
 
