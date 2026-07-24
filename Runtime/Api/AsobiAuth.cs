@@ -42,6 +42,45 @@ namespace Asobi
             return resp;
         }
 
+        /// <summary>
+        /// Opt-in convenience: load (or generate + persist) a device keypair and
+        /// sign in as a guest in one call. Equivalent to calling
+        /// <see cref="GuestAsync"/> with a <c>{device_id, device_secret}</c> you
+        /// manage yourself; the raw primitive stays available for bring-your-own
+        /// storage or key sources.
+        /// </summary>
+        /// <param name="opts">
+        /// Persistence and RNG overrides. When null, the keypair is stored in
+        /// <see cref="PlayerPrefsDeviceStore"/> and generated from the OS CSPRNG.
+        /// </param>
+        public Task<AuthResponse> GuestDeviceAsync(DeviceOptions opts = null)
+        {
+            var effective = new DeviceOptions
+            {
+                Store = opts?.Store ?? new PlayerPrefsDeviceStore(),
+                RandomBytes = opts?.RandomBytes,
+                DeviceId = opts?.DeviceId
+            };
+            return DeviceCredential.SignInAsync(effective, GuestAsync);
+        }
+
+        /// <summary>
+        /// Erase the stored guest keypair so the next <see cref="GuestDeviceAsync"/>
+        /// mints a brand-new guest (<c>data.created = true</c>). Use for "switch
+        /// account" or a local "forget me". Local-only: it does not delete the
+        /// server account, so pair it with <see cref="LogoutAsync"/> to end the
+        /// session, or upgrade the guest first.
+        /// </summary>
+        /// <param name="store">
+        /// The store to clear. When null, defaults to the same
+        /// <see cref="PlayerPrefsDeviceStore"/> (and key) <see cref="GuestDeviceAsync"/>
+        /// uses.
+        /// </param>
+        public void ClearGuestDevice(IDeviceStore store = null)
+        {
+            (store ?? new PlayerPrefsDeviceStore()).Clear();
+        }
+
         public async Task<AuthResponse> UpgradeGuestAsync(string username, string password)
         {
             var req = new GuestUpgradeRequest { username = username, password = password };

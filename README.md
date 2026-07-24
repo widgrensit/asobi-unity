@@ -57,27 +57,66 @@ await client.Matchmaker.AddAsync("demo");
 
 ### Guest / anonymous auth
 
-Sign a player in without a username or password. Generate a device id and a
-device secret (>= 32 CSPRNG bytes, base64-encoded) once, persist them on the
-device, and reuse them to resume the same guest.
+Sign a player in without a username or password. A guest is a real player (with
+a persistent `player_id`); the device holds a `{device_id, device_secret}`
+keypair, and the same pair resumes the same player on every launch.
+
+#### Guest device (recommended)
+
+`GuestDeviceAsync` manages the keypair for you: it generates a device secret
+(32 CSPRNG bytes, standard base64) on first run, persists it in `PlayerPrefs`,
+reuses it after, and signs in.
 
 ```csharp
 using Asobi;
 
 var client = new AsobiClient("localhost", port: 8084);
 
-// deviceId + deviceSecret are yours to generate and persist. The secret
-// must be the base64 of at least 32 cryptographically random bytes.
-var resp = await client.Auth.GuestAsync(deviceId, deviceSecret);
+var resp = await client.Auth.GuestDeviceAsync();
 if (resp.created)
-    Debug.Log($"New guest {resp.player_id}");
+    Debug.Log($"New guest {resp.player_id}");        // run first-time onboarding
 else
-    Debug.Log($"Resumed guest {resp.player_id}");
+    Debug.Log($"Resumed guest {resp.player_id}");    // welcome back
 
-// Later, let the guest claim a permanent account. Uses the current
-// access token and replaces the stored tokens with the upgraded pair.
+// Turn the guest into a permanent account (same player_id, nothing lost).
 var upgraded = await client.Auth.UpgradeGuestAsync("player1", "secret123");
 Debug.Log($"Upgraded: {upgraded.upgraded}");
+```
+
+**Switch guest / "forget me"**: erase the stored keypair so the next
+`GuestDeviceAsync` mints a brand-new guest. Local-only - pair it with
+`LogoutAsync` to end the current session (or `UpgradeGuestAsync` first to keep
+the guest).
+
+```csharp
+await client.Auth.LogoutAsync();
+client.Auth.ClearGuestDevice();   // next launch starts fresh
+```
+
+**Custom storage or a stronger key source**: pass a `DeviceOptions` with your
+own `IDeviceStore` (e.g. a file under `Application.persistentDataPath` or an OS
+keychain) and/or a `RandomBytes` source.
+
+```csharp
+var opts = new DeviceOptions
+{
+    Store = new PlayerPrefsDeviceStore("mygame_guest"),
+    RandomBytes = n => MyCsprng.GetBytes(n),   // must return >= n bytes
+};
+var resp = await client.Auth.GuestDeviceAsync(opts);
+```
+
+#### Bring your own credentials
+
+If you would rather manage the keypair yourself, skip the helper and pass the
+values to `GuestAsync` directly. `deviceSecret` must be standard base64 (RFC
+4648, `+/` with `=` padding) of at least 32 random bytes; `deviceId` is any
+stable per-install string.
+
+```csharp
+// deviceId + deviceSecret are yours to generate and persist.
+var resp = await client.Auth.GuestAsync(deviceId, deviceSecret);
+Debug.Log(resp.created ? $"New guest {resp.player_id}" : $"Resumed {resp.player_id}");
 ```
 
 See the [WebSocket protocol guide](https://github.com/widgrensit/asobi/blob/main/guides/websocket-protocol.md) for the full event surface.
