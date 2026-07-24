@@ -20,6 +20,7 @@
   <ItemGroup>
     <Compile Include="..\..\Runtime\WebSocket\AsobiDispatcher.cs" Link="Source\AsobiDispatcher.cs" />
     <Compile Include="..\..\Runtime\Models\AuthModels.cs" Link="Source\AuthModels.cs" />
+    <Compile Include="..\..\Runtime\DeviceCredential.cs" Link="Source\DeviceCredential.cs" />
   </ItemGroup>
 
   <ItemGroup>
