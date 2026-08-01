@@ -15,6 +15,7 @@ namespace Asobi.Tests
         {
             { "error", nameof(AsobiDispatcher.OnError) },
             { "game.error", nameof(AsobiDispatcher.OnGameError) },
+            { "game.message", nameof(AsobiDispatcher.OnGameMessage) },
             { "session.connected", nameof(AsobiDispatcher.OnConnected) },
             { "session.heartbeat", nameof(AsobiDispatcher.OnHeartbeat) },
             { "match.state", nameof(AsobiDispatcher.OnMatchState) },
@@ -148,6 +149,73 @@ namespace Asobi.Tests
         class GameErrorEnvelope
         {
             public WsGameErrorPayload payload;
+        }
+
+        [Test]
+        public void GameMessageDispatchesStringPayload()
+        {
+            var raw = LoadFixture("game.message");
+            Assert.That(raw, Is.Not.Null.And.Not.Empty, "fixture for 'game.message' missing under Fixtures/");
+
+            var dispatcher = new AsobiDispatcher();
+            string received = null;
+            dispatcher.OnGameMessage += payload => received = payload;
+
+            dispatcher.HandleMessage(raw);
+
+            Assert.That(received, Is.Not.Null, "game.message did not fire OnGameMessage");
+
+            var envelope = JsonSerializer.Deserialize<GameMessageEnvelope>(received, Opts);
+            Assert.That(envelope, Is.Not.Null);
+            Assert.That(envelope.payload, Is.Not.Null);
+            var message = (JsonElement)envelope.payload.message;
+            Assert.That(message.ValueKind, Is.EqualTo(JsonValueKind.String));
+            Assert.That(message.GetString(), Is.EqualTo("jij bent speler nummer 3"));
+        }
+
+        // game.send/2 accepts any Lua value as the message (string, number,
+        // table) - the server wraps it in {"message": <value>} specifically
+        // so it isn't constrained to a string. Prove numeric and nested-
+        // object payloads round-trip via JsonElement instead of throwing or
+        // getting coerced/truncated.
+        [Test]
+        public void GameMessageDispatchesNumberPayload()
+        {
+            var raw = "{\"type\":\"game.message\",\"payload\":{\"message\":42}}";
+
+            var dispatcher = new AsobiDispatcher();
+            string received = null;
+            dispatcher.OnGameMessage += payload => received = payload;
+
+            dispatcher.HandleMessage(raw);
+
+            var envelope = JsonSerializer.Deserialize<GameMessageEnvelope>(received, Opts);
+            var message = (JsonElement)envelope.payload.message;
+            Assert.That(message.ValueKind, Is.EqualTo(JsonValueKind.Number));
+            Assert.That(message.GetInt32(), Is.EqualTo(42));
+        }
+
+        [Test]
+        public void GameMessageDispatchesObjectPayload()
+        {
+            var raw = "{\"type\":\"game.message\",\"payload\":{\"message\":{\"score\":3,\"team\":\"red\"}}}";
+
+            var dispatcher = new AsobiDispatcher();
+            string received = null;
+            dispatcher.OnGameMessage += payload => received = payload;
+
+            dispatcher.HandleMessage(raw);
+
+            var envelope = JsonSerializer.Deserialize<GameMessageEnvelope>(received, Opts);
+            var message = (JsonElement)envelope.payload.message;
+            Assert.That(message.ValueKind, Is.EqualTo(JsonValueKind.Object));
+            Assert.That(message.GetProperty("score").GetInt32(), Is.EqualTo(3));
+            Assert.That(message.GetProperty("team").GetString(), Is.EqualTo("red"));
+        }
+
+        class GameMessageEnvelope
+        {
+            public WsGameMessagePayload payload;
         }
 
         // ---- helpers ----

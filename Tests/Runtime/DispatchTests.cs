@@ -27,6 +27,7 @@ namespace Asobi.Tests
         {
             { "error", nameof(AsobiRealtime.OnError) },
             { "game.error", nameof(AsobiRealtime.OnGameError) },
+            { "game.message", nameof(AsobiRealtime.OnGameMessage) },
             { "session.connected", nameof(AsobiRealtime.OnConnected) },
             { "session.heartbeat", nameof(AsobiRealtime.OnHeartbeat) },
             { "match.state", nameof(AsobiRealtime.OnMatchState) },
@@ -153,6 +154,31 @@ namespace Asobi.Tests
             Assert.That(payload.callback, Is.EqualTo("handle_input"));
             Assert.That(payload.script, Is.EqualTo("match.lua"));
             Assert.That(payload.message, Is.EqualTo("bad arithmetic + on nil, 1"));
+        }
+
+        // game.message's payload.message can be a string, number, or table -
+        // WsGameMessagePayload.message is typed `object` so System.Text.Json
+        // (used by the CI-gating .NET suite) can box it as a JsonElement.
+        // JsonUtility has no notion of an untyped/object field, so it can't
+        // deserialize this payload the way GameErrorDispatchesWithFields
+        // does above; this test sticks to what JsonUtility can actually
+        // verify - that the raw envelope text carries the value through
+        // undamaged - rather than asserting on a field JsonUtility silently
+        // drops.
+        [Test]
+        public void GameMessageDispatchesWithRawValue()
+        {
+            var raw = LoadFixture("game.message");
+            Assert.That(raw, Is.Not.Null.And.Not.Empty, "fixture for 'game.message' missing under Resources/Fixtures/");
+
+            var realtime = new AsobiRealtime();
+            string received = null;
+            realtime.OnGameMessage += payload => received = payload;
+
+            realtime.HandleMessage(raw);
+
+            Assert.That(received, Is.Not.Null, "game.message did not fire OnGameMessage");
+            Assert.That(ExtractPayloadJson(received), Does.Contain("jij bent speler nummer 3"));
         }
 
         // ---- helpers ----

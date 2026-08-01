@@ -117,4 +117,17 @@ namespace Asobi
         public string script;
         public string message;
     }
+
+    // Sent unconditionally in production whenever a Lua game script calls
+    // game.send(player_id, message). `message` is whatever value the
+    // script passed - string, number, or table (JSON object/array) - so
+    // it's typed `object` rather than `string` to avoid throwing or
+    // silently truncating on non-string payloads. Deserializing with
+    // System.Text.Json boxes an object-typed member as a JsonElement -
+    // cast to JsonElement to inspect ValueKind/GetString/GetInt32/etc.
+    [Serializable]
+    public class WsGameMessagePayload
+    {
+        public object message;
+    }
 }
