@@ -157,14 +157,15 @@ namespace Asobi.Tests
         }
 
         // game.message's payload.message can be a string, number, or table -
-        // WsGameMessagePayload.message is typed `object` so System.Text.Json
-        // (used by the CI-gating .NET suite) can box it as a JsonElement.
-        // JsonUtility has no notion of an untyped/object field, so it can't
-        // deserialize this payload the way GameErrorDispatchesWithFields
-        // does above; this test sticks to what JsonUtility can actually
-        // verify - that the raw envelope text carries the value through
-        // undamaged - rather than asserting on a field JsonUtility silently
-        // drops.
+        // WsGameMessagePayload.message is typed `object`, which JsonUtility
+        // silently drops (no exception, no warning; see the doc comment on
+        // WsGameMessagePayload). JsonHelper.ExtractField is the runtime-code
+        // escape hatch for that gap: it hands back the raw JSON text for the
+        // field so a Unity consumer isn't stuck with null. This asserts the
+        // extracted slice equals the expected value exactly, so it would
+        // fail if the payload shape ever changed - a plain substring check
+        // on the raw envelope would keep passing even if `message` were
+        // deleted entirely.
         [Test]
         public void GameMessageDispatchesWithRawValue()
         {
@@ -178,7 +179,10 @@ namespace Asobi.Tests
             realtime.HandleMessage(raw);
 
             Assert.That(received, Is.Not.Null, "game.message did not fire OnGameMessage");
-            Assert.That(ExtractPayloadJson(received), Does.Contain("jij bent speler nummer 3"));
+
+            var payloadJson = ExtractPayloadJson(received);
+            var extracted = JsonHelper.ExtractField(payloadJson, "message");
+            Assert.That(extracted, Is.EqualTo("\"jij bent speler nummer 3\""));
         }
 
         // ---- helpers ----

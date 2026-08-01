@@ -3,8 +3,25 @@ using UnityEngine;
 
 namespace Asobi
 {
-    internal static class JsonHelper
+    public static class JsonHelper
     {
+        /// <summary>
+        /// Extracts the raw, unparsed JSON text for a top-level field from a JSON
+        /// object string. <see cref="UnityEngine.JsonUtility"/> has no notion of an
+        /// untyped/polymorphic field, so it silently drops `object`-typed members
+        /// (e.g. <see cref="WsGameMessagePayload.message"/>) with no exception or
+        /// warning; this is the escape hatch for that gap.
+        /// </summary>
+        /// <remarks>
+        /// For object/array values the returned slice can be passed straight to
+        /// <c>JsonUtility.FromJson&lt;T&gt;(...)</c>. For scalar values the raw literal
+        /// text is returned as-is: a JSON string comes back WITH its surrounding
+        /// quotes, and numbers/booleans/null come back as their literal text
+        /// (e.g. "42", "true", "null"). Returns null if the field isn't present.
+        /// </remarks>
+        public static string ExtractField(string rawJson, string fieldName) =>
+            ExtractJsonField(rawJson, fieldName);
+
         internal static CloudSave ParseCloudSave(string json)
         {
             var save = JsonUtility.FromJson<CloudSave>(json);

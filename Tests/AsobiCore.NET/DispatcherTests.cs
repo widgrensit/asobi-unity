@@ -213,6 +213,46 @@ namespace Asobi.Tests
             Assert.That(message.GetProperty("team").GetString(), Is.EqualTo("red"));
         }
 
+        [Test]
+        public void GameMessageDispatchesArrayPayload()
+        {
+            var raw = "{\"type\":\"game.message\",\"payload\":{\"message\":[1,2,3]}}";
+
+            var dispatcher = new AsobiDispatcher();
+            string received = null;
+            dispatcher.OnGameMessage += payload => received = payload;
+
+            dispatcher.HandleMessage(raw);
+
+            var envelope = JsonSerializer.Deserialize<GameMessageEnvelope>(received, Opts);
+            var message = (JsonElement)envelope.payload.message;
+            Assert.That(message.ValueKind, Is.EqualTo(JsonValueKind.Array));
+            var items = message.EnumerateArray().Select(e => e.GetInt32()).ToList();
+            Assert.That(items, Is.EqualTo(new List<int> { 1, 2, 3 }));
+        }
+
+        // game.send(player_id, nil) is a valid production call (e.g. a
+        // script clearing a previously-sent value) - the server wraps it as
+        // {"message": null} rather than omitting the field. For an
+        // `object`-typed member, System.Text.Json deserializes a JSON null
+        // straight to a C# null (not a JsonElement with ValueKind.Null), so
+        // this asserts against `Is.Null` rather than casting to JsonElement.
+        [Test]
+        public void GameMessageDispatchesNullPayload()
+        {
+            var raw = "{\"type\":\"game.message\",\"payload\":{\"message\":null}}";
+
+            var dispatcher = new AsobiDispatcher();
+            string received = null;
+            dispatcher.OnGameMessage += payload => received = payload;
+
+            dispatcher.HandleMessage(raw);
+
+            var envelope = JsonSerializer.Deserialize<GameMessageEnvelope>(received, Opts);
+            Assert.That(envelope.payload, Is.Not.Null);
+            Assert.That(envelope.payload.message, Is.Null);
+        }
+
         class GameMessageEnvelope
         {
             public WsGameMessagePayload payload;

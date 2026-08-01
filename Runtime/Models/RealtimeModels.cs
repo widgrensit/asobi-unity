@@ -125,6 +125,15 @@ namespace Asobi
     // silently truncating on non-string payloads. Deserializing with
     // System.Text.Json boxes an object-typed member as a JsonElement -
     // cast to JsonElement to inspect ValueKind/GetString/GetInt32/etc.
+    //
+    // Unity's JsonUtility does NOT support this: it has no notion of an
+    // untyped/polymorphic field, so it silently drops `message` (no
+    // exception, no warning - the field is just left at its default null).
+    // JsonUtility.FromJson<WsGameMessagePayload>(...) will therefore never
+    // populate `message`. Unity/JsonUtility consumers should instead call
+    // JsonHelper.ExtractField(payloadJson, "message") to get the raw JSON
+    // text for the field, then JsonUtility.FromJson<T> that slice (for
+    // object/array payloads) or parse the scalar text directly.
     [Serializable]
     public class WsGameMessagePayload
     {
