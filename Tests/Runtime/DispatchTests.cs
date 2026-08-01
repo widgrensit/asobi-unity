@@ -26,6 +26,7 @@ namespace Asobi.Tests
         static readonly Dictionary<string, string> Expected = new()
         {
             { "error", nameof(AsobiRealtime.OnError) },
+            { "game.error", nameof(AsobiRealtime.OnGameError) },
             { "session.connected", nameof(AsobiRealtime.OnConnected) },
             { "session.heartbeat", nameof(AsobiRealtime.OnHeartbeat) },
             { "match.state", nameof(AsobiRealtime.OnMatchState) },
@@ -134,7 +135,50 @@ namespace Asobi.Tests
                 "matchmaker.matched alias should still dispatch to OnMatchmakerMatched");
         }
 
+        [Test]
+        public void GameErrorDispatchesWithFields()
+        {
+            var raw = LoadFixture("game.error");
+            Assert.That(raw, Is.Not.Null.And.Not.Empty, "fixture for 'game.error' missing under Resources/Fixtures/");
+
+            var realtime = new AsobiRealtime();
+            string received = null;
+            realtime.OnGameError += payload => received = payload;
+
+            realtime.HandleMessage(raw);
+
+            Assert.That(received, Is.Not.Null, "game.error did not fire OnGameError");
+
+            var payload = JsonUtility.FromJson<WsGameErrorPayload>(ExtractPayloadJson(received));
+            Assert.That(payload.callback, Is.EqualTo("handle_input"));
+            Assert.That(payload.script, Is.EqualTo("match.lua"));
+            Assert.That(payload.message, Is.EqualTo("bad arithmetic + on nil, 1"));
+        }
+
         // ---- helpers ----
+
+        // Pulls the "payload": {...} object out of a raw envelope so it can
+        // be handed to JsonUtility on its own (JsonUtility has no notion of
+        // a nested-object field typed as a raw JSON blob).
+        static string ExtractPayloadJson(string raw)
+        {
+            const string key = "\"payload\":";
+            var idx = raw.IndexOf(key, StringComparison.Ordinal);
+            Assert.That(idx, Is.GreaterThanOrEqualTo(0), "no payload field in raw envelope");
+
+            var start = idx + key.Length;
+            while (start < raw.Length && raw[start] != '{') start++;
+
+            var depth = 0;
+            var end = start;
+            for (; end < raw.Length; end++)
+            {
+                if (raw[end] == '{') depth++;
+                else if (raw[end] == '}' && --depth == 0) { end++; break; }
+            }
+
+            return raw.Substring(start, end - start);
+        }
 
         static Dictionary<string, string> _fixtureCache;
 

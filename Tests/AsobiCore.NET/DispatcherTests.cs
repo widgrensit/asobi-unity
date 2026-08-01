@@ -11,6 +11,7 @@ namespace Asobi.Tests
         static readonly Dictionary<string, string> Expected = new()
         {
             { "error", nameof(AsobiDispatcher.OnError) },
+            { "game.error", nameof(AsobiDispatcher.OnGameError) },
             { "session.connected", nameof(AsobiDispatcher.OnConnected) },
             { "session.heartbeat", nameof(AsobiDispatcher.OnHeartbeat) },
             { "match.state", nameof(AsobiDispatcher.OnMatchState) },
@@ -109,6 +110,24 @@ namespace Asobi.Tests
 
             Assert.That(fired, Is.True,
                 "matchmaker.matched alias should still dispatch to OnMatchmakerMatched");
+        }
+
+        [Test]
+        public void GameErrorDispatchesWithFields()
+        {
+            var raw = LoadFixture("game.error");
+            Assert.That(raw, Is.Not.Null.And.Not.Empty, "fixture for 'game.error' missing under Fixtures/");
+
+            var dispatcher = new AsobiDispatcher();
+            string received = null;
+            dispatcher.OnGameError += payload => received = payload;
+
+            dispatcher.HandleMessage(raw);
+
+            Assert.That(received, Is.Not.Null, "game.error did not fire OnGameError");
+            Assert.That(received, Does.Contain("\"callback\":\"handle_input\""));
+            Assert.That(received, Does.Contain("\"script\":\"match.lua\""));
+            Assert.That(received, Does.Contain("\"message\":\"bad arithmetic + on nil, 1\""));
         }
 
         // ---- helpers ----
