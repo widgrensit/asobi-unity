@@ -16,7 +16,15 @@ namespace Asobi
         int _cidCounter;
         readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _pending = new();
 
+        int _reconnectAttempts;
+        bool _disconnectRequested;
+        CancellationTokenSource _reconnectCts;
+
         public bool IsConnected => _ws?.State == WebSocketState.Open;
+
+        // Opt-out: set to false to disable automatic reconnection after an
+        // unexpected close. Does not affect a game-initiated DisconnectAsync().
+        public bool AutoReconnect { get; set; } = true;
 
         internal AsobiRealtime(AsobiClient client) => _client = client;
 
@@ -28,6 +36,7 @@ namespace Asobi
         {
             if (IsConnected) return;
 
+            _disconnectRequested = false;
             _ws = new ClientWebSocket();
             _cts = new CancellationTokenSource();
 
@@ -36,6 +45,8 @@ namespace Asobi
 
             var payload = JsonUtility.ToJson(new WsConnectPayload { token = _client.AccessToken });
             await SendAsync("session.connect", payload);
+
+            _reconnectAttempts = 0;
         }
 
         public Task<string> SendHeartbeatAsync()
@@ -178,6 +189,9 @@ namespace Asobi
 
         public async Task DisconnectAsync()
         {
+            _disconnectRequested = true;
+            _reconnectCts?.Cancel();
+
             if (_ws == null) return;
             try
             {
@@ -235,6 +249,7 @@ namespace Asobi
                         if (result.MessageType == WebSocketMessageType.Close)
                         {
                             RaiseDisconnected(result.CloseStatusDescription);
+                            ScheduleReconnect();
                             return;
                         }
                         sb.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
@@ -247,6 +262,52 @@ namespace Asobi
             catch (WebSocketException ex)
             {
                 RaiseDisconnected(ex.Message);
+                ScheduleReconnect();
+            }
+        }
+
+        // Only reaches here on an unexpected close (server-initiated close
+        // frame or a socket error) - DisconnectAsync() sets
+        // _disconnectRequested first, so a game-initiated disconnect never
+        // triggers a reconnect.
+        void ScheduleReconnect()
+        {
+            if (_disconnectRequested || !AutoReconnect) return;
+
+            if (_reconnectAttempts >= AsobiReconnectPolicy.MaxAttempts)
+            {
+                RaiseReconnectFailed();
+                return;
+            }
+
+            var delay = AsobiReconnectPolicy.GetDelay(_reconnectAttempts);
+            _reconnectAttempts++;
+            RaiseReconnecting(_reconnectAttempts, AsobiReconnectPolicy.MaxAttempts);
+
+            _reconnectCts = new CancellationTokenSource();
+            _ = ReconnectAfterDelayAsync(delay, _reconnectCts.Token);
+        }
+
+        async Task ReconnectAfterDelayAsync(TimeSpan delay, CancellationToken ct)
+        {
+            try
+            {
+                await Task.Delay(delay, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            if (_disconnectRequested || !AutoReconnect) return;
+
+            try
+            {
+                await ConnectAsync();
+            }
+            catch
+            {
+                ScheduleReconnect();
             }
         }
 
@@ -261,6 +322,8 @@ namespace Asobi
 
         public void Dispose()
         {
+            _disconnectRequested = true;
+            _reconnectCts?.Cancel();
             _cts?.Cancel();
             _ws?.Dispose();
         }

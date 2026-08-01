@@ -6,6 +6,8 @@ namespace Asobi
     {
         public event Action OnConnected;
         public event Action<string> OnDisconnected;
+        public event Action<int, int> OnReconnecting;
+        public event Action OnReconnectFailed;
         public event Action<string> OnMatchState;
         public event Action<string, string> OnMatchEvent;
         public event Action<string> OnChatMessage;
@@ -43,6 +45,12 @@ namespace Asobi
         public event Action<string> OnWorldPhaseChanged;
 
         protected void RaiseDisconnected(string reason) => OnDisconnected?.Invoke(reason);
+
+        // Fired before each retry, so games can show "Reconnecting (attempt/max)...".
+        protected void RaiseReconnecting(int attempt, int maxAttempts) => OnReconnecting?.Invoke(attempt, maxAttempts);
+
+        // Fired once after the final retry fails; no further attempts will be made.
+        protected void RaiseReconnectFailed() => OnReconnectFailed?.Invoke();
 
         protected internal virtual void OnPendingResponse(string cid, string type, string raw) { }
 
