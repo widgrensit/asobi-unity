@@ -117,4 +117,26 @@ namespace Asobi
         public string script;
         public string message;
     }
+
+    // Sent unconditionally in production whenever a Lua game script calls
+    // game.send(player_id, message). `message` is whatever value the
+    // script passed - string, number, or table (JSON object/array) - so
+    // it's typed `object` rather than `string` to avoid throwing or
+    // silently truncating on non-string payloads. Deserializing with
+    // System.Text.Json boxes an object-typed member as a JsonElement -
+    // cast to JsonElement to inspect ValueKind/GetString/GetInt32/etc.
+    //
+    // Unity's JsonUtility does NOT support this: it has no notion of an
+    // untyped/polymorphic field, so it silently drops `message` (no
+    // exception, no warning - the field is just left at its default null).
+    // JsonUtility.FromJson<WsGameMessagePayload>(...) will therefore never
+    // populate `message`. Unity/JsonUtility consumers should instead call
+    // JsonHelper.ExtractField(payloadJson, "message") to get the raw JSON
+    // text for the field, then JsonUtility.FromJson<T> that slice (for
+    // object/array payloads) or parse the scalar text directly.
+    [Serializable]
+    public class WsGameMessagePayload
+    {
+        public object message;
+    }
 }

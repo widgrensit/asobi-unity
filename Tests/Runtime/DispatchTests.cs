@@ -27,6 +27,7 @@ namespace Asobi.Tests
         {
             { "error", nameof(AsobiRealtime.OnError) },
             { "game.error", nameof(AsobiRealtime.OnGameError) },
+            { "game.message", nameof(AsobiRealtime.OnGameMessage) },
             { "session.connected", nameof(AsobiRealtime.OnConnected) },
             { "session.heartbeat", nameof(AsobiRealtime.OnHeartbeat) },
             { "match.state", nameof(AsobiRealtime.OnMatchState) },
@@ -153,6 +154,35 @@ namespace Asobi.Tests
             Assert.That(payload.callback, Is.EqualTo("handle_input"));
             Assert.That(payload.script, Is.EqualTo("match.lua"));
             Assert.That(payload.message, Is.EqualTo("bad arithmetic + on nil, 1"));
+        }
+
+        // game.message's payload.message can be a string, number, or table -
+        // WsGameMessagePayload.message is typed `object`, which JsonUtility
+        // silently drops (no exception, no warning; see the doc comment on
+        // WsGameMessagePayload). JsonHelper.ExtractField is the runtime-code
+        // escape hatch for that gap: it hands back the raw JSON text for the
+        // field so a Unity consumer isn't stuck with null. This asserts the
+        // extracted slice equals the expected value exactly, so it would
+        // fail if the payload shape ever changed - a plain substring check
+        // on the raw envelope would keep passing even if `message` were
+        // deleted entirely.
+        [Test]
+        public void GameMessageDispatchesWithRawValue()
+        {
+            var raw = LoadFixture("game.message");
+            Assert.That(raw, Is.Not.Null.And.Not.Empty, "fixture for 'game.message' missing under Resources/Fixtures/");
+
+            var realtime = new AsobiRealtime();
+            string received = null;
+            realtime.OnGameMessage += payload => received = payload;
+
+            realtime.HandleMessage(raw);
+
+            Assert.That(received, Is.Not.Null, "game.message did not fire OnGameMessage");
+
+            var payloadJson = ExtractPayloadJson(received);
+            var extracted = JsonHelper.ExtractField(payloadJson, "message");
+            Assert.That(extracted, Is.EqualTo("\"jij bent speler nummer 3\""));
         }
 
         // ---- helpers ----

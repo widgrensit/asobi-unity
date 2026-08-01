@@ -33,6 +33,7 @@ namespace Asobi
         public event Action<string> OnVoteVetoOk;
         public event Action<string> OnError;
         public event Action<string> OnGameError;
+        public event Action<string> OnGameMessage;
         public event Action<string> OnHeartbeat;
         public event Action<string> OnMatchFinished;
         public event Action<string> OnMatchmakerExpired;
@@ -157,6 +158,9 @@ namespace Asobi
                     break;
                 case "game.error":
                     OnGameError?.Invoke(raw);
+                    break;
+                case "game.message":
+                    OnGameMessage?.Invoke(raw);
                     break;
                 default:
                     if (env.Type.StartsWith("match."))
