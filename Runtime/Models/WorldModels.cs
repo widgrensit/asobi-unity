@@ -12,7 +12,6 @@ namespace Asobi
         public string mode;
         public int grid_size;
         public long started_at;
-        public string[] players;
         public bool HasCapacity => player_count < max_players;
     }
 
