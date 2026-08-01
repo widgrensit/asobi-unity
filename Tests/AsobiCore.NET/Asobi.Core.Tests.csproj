@@ -9,6 +9,11 @@
     <RootNamespace>Asobi.Tests</RootNamespace>
     <AssemblyName>Asobi.Tests</AssemblyName>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <!-- RealtimeModels.cs's outbound request POCOs (WsMatchInputPayload etc.)
+         have their fields set via object-initializer call sites that live in
+         Unity-only files this scoped test project doesn't link - CS0649 is
+         a false positive here, not a real unused-field bug. -->
+    <NoWarn>$(NoWarn);CS0649</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,6 +25,7 @@
   <ItemGroup>
     <Compile Include="..\..\Runtime\WebSocket\AsobiDispatcher.cs" Link="Source\AsobiDispatcher.cs" />
     <Compile Include="..\..\Runtime\Models\AuthModels.cs" Link="Source\AuthModels.cs" />
+    <Compile Include="..\..\Runtime\Models\RealtimeModels.cs" Link="Source\RealtimeModels.cs" />
     <Compile Include="..\..\Runtime\DeviceCredential.cs" Link="Source\DeviceCredential.cs" />
   </ItemGroup>
 

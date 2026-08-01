@@ -169,12 +169,27 @@ namespace Asobi.Tests
             var start = idx + key.Length;
             while (start < raw.Length && raw[start] != '{') start++;
 
+            // A game.error message is an arbitrary Lua error string and can
+            // contain '{'/'}' inside a JSON string value (e.g. a Lua table
+            // literal quoted in the error text) - track string state so
+            // brace-counting only applies outside string literals, and skip
+            // the character after a backslash so an escaped quote doesn't
+            // toggle string state early.
             var depth = 0;
             var end = start;
+            var inString = false;
             for (; end < raw.Length; end++)
             {
-                if (raw[end] == '{') depth++;
-                else if (raw[end] == '}' && --depth == 0) { end++; break; }
+                var c = raw[end];
+                if (inString)
+                {
+                    if (c == '\\') { end++; continue; }
+                    if (c == '"') inString = false;
+                    continue;
+                }
+                if (c == '"') { inString = true; continue; }
+                if (c == '{') depth++;
+                else if (c == '}' && --depth == 0) { end++; break; }
             }
 
             return raw.Substring(start, end - start);
