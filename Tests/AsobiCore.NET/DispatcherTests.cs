@@ -2,15 +2,19 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using NUnit.Framework;
 
 namespace Asobi.Tests
 {
     public class DispatcherTests
     {
+        static readonly JsonSerializerOptions Opts = new() { IncludeFields = true };
+
         static readonly Dictionary<string, string> Expected = new()
         {
             { "error", nameof(AsobiDispatcher.OnError) },
+            { "game.error", nameof(AsobiDispatcher.OnGameError) },
             { "session.connected", nameof(AsobiDispatcher.OnConnected) },
             { "session.heartbeat", nameof(AsobiDispatcher.OnHeartbeat) },
             { "match.state", nameof(AsobiDispatcher.OnMatchState) },
@@ -109,6 +113,41 @@ namespace Asobi.Tests
 
             Assert.That(fired, Is.True,
                 "matchmaker.matched alias should still dispatch to OnMatchmakerMatched");
+        }
+
+        [Test]
+        public void GameErrorDispatchesWithFields()
+        {
+            var raw = LoadFixture("game.error");
+            Assert.That(raw, Is.Not.Null.And.Not.Empty, "fixture for 'game.error' missing under Fixtures/");
+
+            var dispatcher = new AsobiDispatcher();
+            string received = null;
+            dispatcher.OnGameError += payload => received = payload;
+
+            dispatcher.HandleMessage(raw);
+
+            Assert.That(received, Is.Not.Null, "game.error did not fire OnGameError");
+
+            // OnGameError hands callers the full raw envelope (type/payload/
+            // cid), not just the payload - WsMessage.payload is typed
+            // `string` (JsonUtility can't target a nested object at
+            // runtime), so this test-only envelope type targets
+            // WsGameErrorPayload directly instead. Deserializing is what
+            // would actually break if WsGameErrorPayload's fields were
+            // renamed; the substring match this replaced only checked the
+            // raw envelope text and would have kept passing regardless.
+            var envelope = JsonSerializer.Deserialize<GameErrorEnvelope>(received, Opts);
+            Assert.That(envelope, Is.Not.Null);
+            Assert.That(envelope.payload, Is.Not.Null);
+            Assert.That(envelope.payload.callback, Is.EqualTo("handle_input"));
+            Assert.That(envelope.payload.script, Is.EqualTo("match.lua"));
+            Assert.That(envelope.payload.message, Is.EqualTo("bad arithmetic + on nil, 1"));
+        }
+
+        class GameErrorEnvelope
+        {
+            public WsGameErrorPayload payload;
         }
 
         // ---- helpers ----

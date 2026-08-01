@@ -107,4 +107,14 @@ namespace Asobi
         public string content;
         public string sent_at;
     }
+
+    // Dev-mode only: sent when a Lua game-script callback errors while
+    // handling this player's input (ASOBI_DEV_ERRORS=true server-side).
+    [Serializable]
+    public class WsGameErrorPayload
+    {
+        public string callback;
+        public string script;
+        public string message;
+    }
 }

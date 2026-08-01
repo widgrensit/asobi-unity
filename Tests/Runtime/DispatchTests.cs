@@ -26,6 +26,7 @@ namespace Asobi.Tests
         static readonly Dictionary<string, string> Expected = new()
         {
             { "error", nameof(AsobiRealtime.OnError) },
+            { "game.error", nameof(AsobiRealtime.OnGameError) },
             { "session.connected", nameof(AsobiRealtime.OnConnected) },
             { "session.heartbeat", nameof(AsobiRealtime.OnHeartbeat) },
             { "match.state", nameof(AsobiRealtime.OnMatchState) },
@@ -134,7 +135,65 @@ namespace Asobi.Tests
                 "matchmaker.matched alias should still dispatch to OnMatchmakerMatched");
         }
 
+        [Test]
+        public void GameErrorDispatchesWithFields()
+        {
+            var raw = LoadFixture("game.error");
+            Assert.That(raw, Is.Not.Null.And.Not.Empty, "fixture for 'game.error' missing under Resources/Fixtures/");
+
+            var realtime = new AsobiRealtime();
+            string received = null;
+            realtime.OnGameError += payload => received = payload;
+
+            realtime.HandleMessage(raw);
+
+            Assert.That(received, Is.Not.Null, "game.error did not fire OnGameError");
+
+            var payload = JsonUtility.FromJson<WsGameErrorPayload>(ExtractPayloadJson(received));
+            Assert.That(payload.callback, Is.EqualTo("handle_input"));
+            Assert.That(payload.script, Is.EqualTo("match.lua"));
+            Assert.That(payload.message, Is.EqualTo("bad arithmetic + on nil, 1"));
+        }
+
         // ---- helpers ----
+
+        // Pulls the "payload": {...} object out of a raw envelope so it can
+        // be handed to JsonUtility on its own (JsonUtility has no notion of
+        // a nested-object field typed as a raw JSON blob).
+        static string ExtractPayloadJson(string raw)
+        {
+            const string key = "\"payload\":";
+            var idx = raw.IndexOf(key, StringComparison.Ordinal);
+            Assert.That(idx, Is.GreaterThanOrEqualTo(0), "no payload field in raw envelope");
+
+            var start = idx + key.Length;
+            while (start < raw.Length && raw[start] != '{') start++;
+
+            // A game.error message is an arbitrary Lua error string and can
+            // contain '{'/'}' inside a JSON string value (e.g. a Lua table
+            // literal quoted in the error text) - track string state so
+            // brace-counting only applies outside string literals, and skip
+            // the character after a backslash so an escaped quote doesn't
+            // toggle string state early.
+            var depth = 0;
+            var end = start;
+            var inString = false;
+            for (; end < raw.Length; end++)
+            {
+                var c = raw[end];
+                if (inString)
+                {
+                    if (c == '\\') { end++; continue; }
+                    if (c == '"') inString = false;
+                    continue;
+                }
+                if (c == '"') { inString = true; continue; }
+                if (c == '{') depth++;
+                else if (c == '}' && --depth == 0) { end++; break; }
+            }
+
+            return raw.Substring(start, end - start);
+        }
 
         static Dictionary<string, string> _fixtureCache;
 
