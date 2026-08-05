@@ -121,6 +121,32 @@ Debug.Log(resp.created ? $"New guest {resp.player_id}" : $"Resumed {resp.player_
 
 See the [WebSocket protocol guide](https://github.com/widgrensit/asobi/blob/main/guides/websocket-protocol.md) for the full event surface.
 
+## Extensions (RPC)
+
+Server extensions expose methods over the same socket:
+
+```csharp
+try
+{
+    var json = await client.Realtime.RpcAsync(
+        "quests.claim", "{\"quest_key\":\"daily\"}");
+    var claim = JsonUtility.FromJson<QuestClaim>(json);
+    Debug.Log($"reward: {claim.reward}");
+}
+catch (AsobiRpcException e) when (e.Code == "quests.already_claimed")
+{
+    Debug.Log("already claimed today");
+}
+```
+
+`RpcAsync` returns the `result` object as raw JSON — deserialize it into
+whatever type the extension documents. Calls are correlated by cid, so several
+can be in flight at once and may answer out of order.
+
+On failure it throws `AsobiRpcException`. Branch on `Code`; `Message` is for
+humans and may be reworded at any time. `DetailsJson` carries whatever the
+extension attached, as raw JSON.
+
 ## Features
 
 - **Auth** — Register, login, guest (anonymous device create-or-resume + upgrade), OAuth, provider linking, token refresh
@@ -136,6 +162,7 @@ See the [WebSocket protocol guide](https://github.com/widgrensit/asobi/blob/main
 - **Storage** — Cloud saves, key-value
 - **IAP** — In-app purchase receipt validation
 - **Realtime** — WebSocket with events for matches, chat, presence, matchmaking
+- **Extensions** — Call server extension methods over RPC
 
 ## Build targets
 

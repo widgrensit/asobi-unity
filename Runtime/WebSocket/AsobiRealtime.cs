@@ -54,6 +54,57 @@ namespace Asobi
             return SendAsync("session.heartbeat", "{}");
         }
 
+        /// <summary>
+        /// Call a server extension's RPC method.
+        /// </summary>
+        /// <param name="method">Namespaced method, e.g. "quests.claim".</param>
+        /// <param name="paramsJson">
+        /// The params object as JSON. Always an object, so an extension can add
+        /// a field without breaking a shipped game.
+        /// </param>
+        /// <returns>
+        /// The result object as raw JSON - deserialize into whatever type the
+        /// extension documents.
+        /// </returns>
+        /// <exception cref="AsobiRpcException">
+        /// The method rejected the call. Branch on <see cref="AsobiRpcException.Code"/>,
+        /// never on the message.
+        /// </exception>
+        /// <remarks>
+        /// Correlated by cid like every other request, so several calls may be
+        /// in flight at once and may answer out of order.
+        /// </remarks>
+        public Task<string> RpcAsync(string method, string paramsJson = "{}")
+        {
+            if (string.IsNullOrEmpty(method)) throw new ArgumentException("method is required", nameof(method));
+            if (string.IsNullOrEmpty(paramsJson)) paramsJson = "{}";
+            // protocol versions the payload rather than the frame type, so a
+            // future version is a rejection a client can read.
+            var payload = $"{{\"protocol\":1,\"method\":{JsonQuote(method)},\"params\":{paramsJson}}}";
+            return SendAsync("rpc.call", payload);
+        }
+
+        static string JsonQuote(string s)
+        {
+            var sb = new System.Text.StringBuilder("\"");
+            foreach (var c in s)
+            {
+                switch (c)
+                {
+                    case '"': sb.Append("\\\""); break;
+                    case '\\': sb.Append("\\\\"); break;
+                    case '\n': sb.Append("\\n"); break;
+                    case '\r': sb.Append("\\r"); break;
+                    case '\t': sb.Append("\\t"); break;
+                    default:
+                        if (c < ' ') sb.Append("\\u").Append(((int)c).ToString("x4"));
+                        else sb.Append(c);
+                        break;
+                }
+            }
+            return sb.Append('"').ToString();
+        }
+
         public Task SendMatchInputAsync(string data)
         {
             var payload = JsonUtility.ToJson(new WsMatchInputPayload { data = data });
@@ -314,7 +365,15 @@ namespace Asobi
         protected internal override void OnPendingResponse(string cid, string type, string raw)
         {
             if (!_pending.TryRemove(cid, out var tcs)) return;
-            if (type == "error")
+            if (type == "rpc.ok" || type == "rpc.error")
+            {
+                var reply = RpcReply.Parse(type, raw);
+                if (reply.IsError)
+                    tcs.SetException(new AsobiRpcException(reply.Code, reply.Message, reply.DetailsJson));
+                else
+                    tcs.SetResult(reply.ResultJson);
+            }
+            else if (type == "error")
                 tcs.SetException(new AsobiException(-1, raw));
             else
                 tcs.SetResult(raw);
