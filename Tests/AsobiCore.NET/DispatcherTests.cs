@@ -11,11 +11,21 @@ namespace Asobi.Tests
     {
         static readonly JsonSerializerOptions Opts = new() { IncludeFields = true };
 
+        // Answers correlated by cid rather than fired as an event: the reply
+        // goes to the caller that made the request, so there is no event to
+        // assert. Listed so a new fixture still has to be accounted for, and
+        // covered for real in RpcTests.
+        const string Correlated = "<correlated by cid>";
+
         static readonly Dictionary<string, string> Expected = new()
         {
+            { "rpc.ok", Correlated },
+            { "rpc.error", Correlated },
             { "error", nameof(AsobiDispatcher.OnError) },
             { "game.error", nameof(AsobiDispatcher.OnGameError) },
             { "game.message", nameof(AsobiDispatcher.OnGameMessage) },
+            { "module.error", nameof(AsobiDispatcher.OnGameError) },
+            { "module.message", nameof(AsobiDispatcher.OnGameMessage) },
             { "session.connected", nameof(AsobiDispatcher.OnConnected) },
             { "session.heartbeat", nameof(AsobiDispatcher.OnHeartbeat) },
             { "match.state", nameof(AsobiDispatcher.OnMatchState) },
@@ -61,6 +71,12 @@ namespace Asobi.Tests
             var raw = LoadFixture(wireType);
             Assert.That(raw, Is.Not.Null.And.Not.Empty,
                 $"fixture for '{wireType}' missing under Fixtures/");
+
+            if (eventName == Correlated)
+            {
+                Assert.Pass($"{wireType} is correlated by cid - see RpcTests");
+                return;
+            }
 
             var dispatcher = new AsobiDispatcher();
             var fired = false;

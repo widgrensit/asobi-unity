@@ -196,6 +196,26 @@ namespace Asobi
         public bool success;
     }
 
+    // An extension's RPC method rejected the call. Distinct from AsobiException
+    // because the shared error object carries a `code` - the one part a caller
+    // can branch on. Message is for humans and may be reworded at any time, so
+    // switching on it is a bug waiting to happen.
+    public class AsobiRpcException : Exception
+    {
+        public string Code { get; }
+
+        // Raw JSON, because details are defined by the extension, not by us.
+        // Deserialize into whatever shape that extension documents.
+        public string DetailsJson { get; }
+
+        public AsobiRpcException(string code, string message, string detailsJson = null)
+            : base(message)
+        {
+            Code = code;
+            DetailsJson = detailsJson;
+        }
+    }
+
     public class AsobiException : Exception
     {
         public int StatusCode { get; }

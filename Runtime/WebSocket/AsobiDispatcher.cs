@@ -164,10 +164,15 @@ namespace Asobi
                 case "error":
                     OnError?.Invoke(raw);
                     break;
+                // module.* are the server's current names for the same two
+                // events. Without them a game silently drops dev-console
+                // output from a server on the newer naming.
                 case "game.error":
+                case "module.error":
                     OnGameError?.Invoke(raw);
                     break;
                 case "game.message":
+                case "module.message":
                     OnGameMessage?.Invoke(raw);
                     break;
                 default:
@@ -263,6 +268,167 @@ namespace Asobi
                 return c == '{' || c == ',';
             }
             return true;
+        }
+    }
+
+    // The decoded form of an rpc.ok / rpc.error frame.
+    //
+    // Lives here rather than in AsobiRealtime so it can be tested: this file is
+    // Unity-free and linked into the plain .NET test project, AsobiRealtime is
+    // not. AsobiRealtime does nothing with a reply except turn one of these
+    // into a completed or faulted Task.
+    internal readonly struct RpcReply
+    {
+        public readonly bool IsError;
+        public readonly string ResultJson;
+        public readonly string Code;
+        public readonly string Message;
+        public readonly string DetailsJson;
+
+        RpcReply(bool isError, string resultJson, string code, string message, string detailsJson)
+        {
+            IsError = isError;
+            ResultJson = resultJson;
+            Code = code;
+            Message = message;
+            DetailsJson = detailsJson;
+        }
+
+        public static RpcReply Parse(string type, string raw)
+        {
+            if (type == "rpc.error")
+            {
+                // An empty error object still gets a code, or a server defect
+                // and a domain outcome look identical to a caller branching on
+                // Code. Message falls back to the code rather than to null, so
+                // Exception.Message is never empty.
+                var code = JsonSlice.Unquote(JsonSlice.Read(raw, "payload", "error", "code")) ?? "internal";
+                var message = JsonSlice.Unquote(JsonSlice.Read(raw, "payload", "error", "message")) ?? code;
+                return new RpcReply(true, null, code, message,
+                    JsonSlice.Read(raw, "payload", "error", "details"));
+            }
+            // The result, not the envelope: a caller deserializing into its own
+            // type should not have to know the frame shape.
+            return new RpcReply(false, JsonSlice.Read(raw, "payload", "result") ?? "{}", null, null, null);
+        }
+    }
+
+    // RPC results and error details are arbitrary game-defined JSON, so they
+    // cannot be read with ReadStringField and are not worth a parser: hand the
+    // caller the raw substring and let it deserialize into whatever type it
+    // expects. Brace/bracket depth aware, and skips over strings so a brace
+    // inside a message ("}") does not truncate the value.
+    internal static class JsonSlice
+    {
+        // Returns the raw JSON value of `path` (a chain of nested object keys),
+        // or null if any step is absent. Read(raw, "payload", "result") on
+        // {"payload":{"result":{"reward":100}}} gives {"reward":100}.
+        public static string Read(string json, params string[] path)
+        {
+            if (string.IsNullOrEmpty(json)) return null;
+            var span = json;
+            foreach (var key in path)
+            {
+                span = ValueOf(span, key);
+                if (span == null) return null;
+            }
+            return span;
+        }
+
+        static string ValueOf(string json, string field)
+        {
+            var key = "\"" + field + "\"";
+            int i = 0;
+            while (true)
+            {
+                int k = json.IndexOf(key, i, StringComparison.Ordinal);
+                if (k < 0) return null;
+                int p = k + key.Length;
+                p = SkipWs(json, p);
+                if (p >= json.Length || json[p] != ':') { i = k + key.Length; continue; }
+                p = SkipWs(json, p + 1);
+                if (p >= json.Length) return null;
+                int end = EndOfValue(json, p);
+                return end < 0 ? null : json.Substring(p, end - p);
+            }
+        }
+
+        // Decodes a raw JSON string literal (quotes and escapes) to its text.
+        // Returns null for anything that is not a string, so a caller can tell
+        // an absent field from one holding a number or an object.
+        public static string Unquote(string raw)
+        {
+            if (raw == null || raw.Length < 2 || raw[0] != '"') return null;
+            var sb = new System.Text.StringBuilder();
+            for (int p = 1; p < raw.Length; p++)
+            {
+                char c = raw[p];
+                if (c == '"') return sb.ToString();
+                if (c == '\\' && p + 1 < raw.Length)
+                {
+                    char n = raw[++p];
+                    switch (n)
+                    {
+                        case 'n': sb.Append('\n'); break;
+                        case 't': sb.Append('\t'); break;
+                        case 'r': sb.Append('\r'); break;
+                        case 'b': sb.Append('\b'); break;
+                        case 'f': sb.Append('\f'); break;
+                        case 'u':
+                            if (p + 4 < raw.Length &&
+                                int.TryParse(raw.Substring(p + 1, 4),
+                                    System.Globalization.NumberStyles.HexNumber,
+                                    System.Globalization.CultureInfo.InvariantCulture, out var cp))
+                            {
+                                sb.Append((char)cp);
+                                p += 4;
+                            }
+                            break;
+                        default: sb.Append(n); break;
+                    }
+                    continue;
+                }
+                sb.Append(c);
+            }
+            return sb.ToString();
+        }
+
+        static int SkipWs(string s, int p)
+        {
+            while (p < s.Length && (s[p] == ' ' || s[p] == '\t' || s[p] == '\n' || s[p] == '\r')) p++;
+            return p;
+        }
+
+        static int EndOfValue(string s, int start)
+        {
+            char open = s[start];
+            if (open == '"') return EndOfString(s, start);
+            if (open != '{' && open != '[')
+            {
+                int p = start;
+                while (p < s.Length && s[p] != ',' && s[p] != '}' && s[p] != ']') p++;
+                return p;
+            }
+            char close = open == '{' ? '}' : ']';
+            int depth = 0;
+            for (int p = start; p < s.Length; p++)
+            {
+                char c = s[p];
+                if (c == '"') { p = EndOfString(s, p) - 1; continue; }
+                if (c == open) depth++;
+                else if (c == close && --depth == 0) return p + 1;
+            }
+            return -1;
+        }
+
+        static int EndOfString(string s, int quote)
+        {
+            for (int p = quote + 1; p < s.Length; p++)
+            {
+                if (s[p] == '\\') { p++; continue; }
+                if (s[p] == '"') return p + 1;
+            }
+            return s.Length;
         }
     }
 }
