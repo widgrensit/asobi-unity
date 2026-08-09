@@ -119,93 +119,9 @@ namespace Asobi
             return new NotificationListResponse { notifications = notifications };
         }
 
-        internal static string ExtractJsonField(string json, string fieldName)
-        {
-            var searchKey = $"\"{fieldName}\":";
-            int keyIdx = json.IndexOf(searchKey, StringComparison.Ordinal);
-            if (keyIdx < 0)
-                return null;
+        internal static string ExtractJsonField(string json, string fieldName) =>
+            JsonScan.ExtractField(json, fieldName);
 
-            int valueStart = keyIdx + searchKey.Length;
-            while (valueStart < json.Length && json[valueStart] == ' ')
-                valueStart++;
-
-            if (valueStart >= json.Length)
-                return null;
-
-            char startChar = json[valueStart];
-
-            if (startChar == '{' || startChar == '[')
-                return ExtractBracketedValue(json, valueStart, startChar);
-
-            if (startChar == '"')
-                return ExtractStringValue(json, valueStart);
-
-            int endIdx = valueStart;
-            while (endIdx < json.Length && json[endIdx] != ',' && json[endIdx] != '}' && json[endIdx] != ']')
-                endIdx++;
-            return json.Substring(valueStart, endIdx - valueStart).Trim();
-        }
-
-        static string ExtractBracketedValue(string json, int start, char openChar)
-        {
-            char closeChar = openChar == '{' ? '}' : ']';
-            int depth = 0;
-            bool inString = false;
-            bool escaped = false;
-
-            for (int i = start; i < json.Length; i++)
-            {
-                char c = json[i];
-                if (escaped)
-                {
-                    escaped = false;
-                    continue;
-                }
-                if (c == '\\' && inString)
-                {
-                    escaped = true;
-                    continue;
-                }
-                if (c == '"')
-                {
-                    inString = !inString;
-                    continue;
-                }
-                if (inString) continue;
-
-                if (c == openChar) depth++;
-                else if (c == closeChar)
-                {
-                    depth--;
-                    if (depth == 0)
-                        return json.Substring(start, i - start + 1);
-                }
-            }
-            return null;
-        }
-
-        static string ExtractStringValue(string json, int start)
-        {
-            bool escaped = false;
-            for (int i = start + 1; i < json.Length; i++)
-            {
-                char c = json[i];
-                if (escaped)
-                {
-                    escaped = false;
-                    continue;
-                }
-                if (c == '\\')
-                {
-                    escaped = true;
-                    continue;
-                }
-                if (c == '"')
-                    return json.Substring(start, i - start + 1);
-            }
-            return null;
-        }
 
         internal static string[] SplitJsonArray(string arrayJson)
         {

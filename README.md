@@ -93,6 +93,23 @@ await client.Auth.LogoutAsync();
 client.Auth.ClearGuestDevice();   // next launch starts fresh
 ```
 
+**Delete the account**: `ClearGuestDevice` is local only - the account and its
+data stay on the server. For an actual deletion, and for the in-app account
+deletion the app stores require, erase it:
+
+```csharp
+await client.Players.EraseSelfAsync();               // guest or provider-only
+await client.Players.EraseSelfAsync("secret123");    // account with a password
+```
+
+Irreversible. A wrong password throws `AsobiException` with
+`Error.code == "player.confirmation_failed"` (403) and changes nothing. On
+success the local session is cleared, because the server deleted the token pair
+in the same transaction; anything afterwards on that session is a `401`, which
+for a retried erase means it already worked.
+
+Needs a server carrying `POST /api/v1/players/me/erase`; older ones answer 404.
+
 **Custom storage or a stronger key source**: pass a `DeviceOptions` with your
 own `IDeviceStore` (e.g. a file under `Application.persistentDataPath` or an OS
 keychain) and/or a `RandomBytes` source.
