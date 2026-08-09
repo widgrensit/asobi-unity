@@ -118,8 +118,7 @@ namespace Asobi
 
             if (req.responseCode >= 400)
             {
-                AsobiError error = null;
-                try { error = JsonUtility.FromJson<AsobiError>(responseText); } catch { }
+                AsobiError error = AsobiErrorParser.Parse(responseText);
                 throw new AsobiException(
                     (int)req.responseCode,
                     error?.error ?? $"HTTP {req.responseCode}",
@@ -147,8 +146,7 @@ namespace Asobi
 
             if (req.responseCode >= 400)
             {
-                AsobiError error = null;
-                try { error = JsonUtility.FromJson<AsobiError>(responseText); } catch { }
+                AsobiError error = AsobiErrorParser.Parse(responseText);
                 throw new AsobiException(
                     (int)req.responseCode,
                     error?.error ?? $"HTTP {req.responseCode}",
@@ -182,12 +180,6 @@ namespace Asobi
             }
             return url;
         }
-    }
-
-    [Serializable]
-    public class AsobiError
-    {
-        public string error;
     }
 
     [Serializable]

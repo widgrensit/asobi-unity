@@ -36,6 +36,16 @@ namespace Asobi
         public string password;
     }
 
+    /// <summary>
+    /// Body for <c>POST /api/v1/players/me/erase</c>. Only ever serialized when
+    /// the account has a password - see <c>AsobiPlayers.EraseSelfAsync</c>.
+    /// </summary>
+    [Serializable]
+    public class EraseAccountRequest
+    {
+        public string password;
+    }
+
     [Serializable]
     public class OAuthRequest
     {

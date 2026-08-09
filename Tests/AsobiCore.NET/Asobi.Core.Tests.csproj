@@ -28,6 +28,9 @@
     <Compile Include="..\..\Runtime\Models\AuthModels.cs" Link="Source\AuthModels.cs" />
     <Compile Include="..\..\Runtime\Models\RealtimeModels.cs" Link="Source\RealtimeModels.cs" />
     <Compile Include="..\..\Runtime\DeviceCredential.cs" Link="Source\DeviceCredential.cs" />
+    <Compile Include="..\..\Runtime\JsonScan.cs" Link="Source\JsonScan.cs" />
+    <Compile Include="..\..\Runtime\ErrorModels.cs" Link="Source\ErrorModels.cs" />
+    <Compile Include="..\..\Runtime\AsobiErrorParser.cs" Link="Source\AsobiErrorParser.cs" />
   </ItemGroup>
 
   <ItemGroup>
