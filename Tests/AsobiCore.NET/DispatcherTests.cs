@@ -22,9 +22,8 @@ namespace Asobi.Tests
             { "rpc.ok", Correlated },
             { "rpc.error", Correlated },
             // Every WS request in this SDK goes out through SendAsync and gets
-            // its answer back on the cid, so a match.list reply would never be
-            // an event even once the request exists. It does not yet: this SDK
-            // has no realtime match listing, unlike defold/godot/love2d.
+            // its answer back on the cid, so the match.list reply sent by
+            // AsobiRealtime.MatchListAsync is never an event.
             { "match.list", Correlated },
             { "error", nameof(AsobiDispatcher.OnError) },
             { "game.error", nameof(AsobiDispatcher.OnGameError) },

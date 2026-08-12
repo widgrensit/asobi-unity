@@ -25,6 +25,7 @@ namespace Asobi
         public string reason;
         public string reference_type;
         public string reference_id;
+        public string metadata;
         public string inserted_at;
     }
 
@@ -44,6 +45,7 @@ namespace Asobi
         public bool active;
         public string valid_from;
         public string valid_until;
+        public string metadata;
     }
 
     [Serializable]

@@ -111,6 +111,40 @@ namespace Asobi
             return SendFireAndForget("match.input", payload);
         }
 
+        /// <summary>
+        /// Browse live matches. Every filter is optional; an omitted one is
+        /// not applied.
+        /// </summary>
+        /// <param name="mode">Only matches running this mode.</param>
+        /// <param name="hasCapacity">True to keep only matches with a free slot.</param>
+        /// <param name="joinable">
+        /// True for matches open to new players, false for the ones that have
+        /// closed themselves - a browser showing in-progress matches asks for
+        /// false. Separate from <paramref name="hasCapacity"/>: a match with
+        /// room may still be closed.
+        /// </param>
+        /// <remarks>
+        /// Only modes that opt in with `listed = true` appear here - a
+        /// matchmaker-spawned match is already assigned to its players.
+        /// </remarks>
+        public Task<string> MatchListAsync(string mode = null, bool? hasCapacity = null, bool? joinable = null)
+        {
+            string payload;
+            if (mode != null || hasCapacity.HasValue || joinable.HasValue)
+            {
+                var parts = new System.Collections.Generic.List<string>();
+                if (mode != null) parts.Add($"\"mode\":\"{mode}\"");
+                if (hasCapacity.HasValue) parts.Add($"\"has_capacity\":{(hasCapacity.Value ? "true" : "false")}");
+                if (joinable.HasValue) parts.Add($"\"joinable\":{(joinable.Value ? "true" : "false")}");
+                payload = "{" + string.Join(",", parts) + "}";
+            }
+            else
+            {
+                payload = "{}";
+            }
+            return SendAsync("match.list", payload);
+        }
+
         public Task<string> JoinMatchAsync(string matchId)
         {
             var payload = JsonUtility.ToJson(new WsMatchJoinPayload { match_id = matchId });
