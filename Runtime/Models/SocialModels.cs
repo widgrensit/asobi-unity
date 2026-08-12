@@ -40,6 +40,7 @@ namespace Asobi
         public int max_members;
         public bool open;
         public string creator_id;
+        public string metadata;
         public string inserted_at;
         public string updated_at;
     }
@@ -65,6 +66,8 @@ namespace Asobi
     [Serializable]
     public class GroupMember
     {
+        public string id;
+        public string group_id;
         public string player_id;
         public string role;
         public string joined_at;
@@ -90,6 +93,7 @@ namespace Asobi
         public string channel_id;
         public string sender_id;
         public string content;
+        public string metadata;
         public string sent_at;
     }
 

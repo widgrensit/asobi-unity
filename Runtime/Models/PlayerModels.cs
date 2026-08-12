@@ -22,7 +22,7 @@ namespace Asobi
         public int wins;
         public int losses;
         public float rating;
-        public float rating_dev;
+        public float rating_deviation;
         public string updated_at;
     }
 

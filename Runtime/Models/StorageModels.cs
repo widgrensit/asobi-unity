@@ -5,6 +5,7 @@ namespace Asobi
     [Serializable]
     public class CloudSave
     {
+        public string id;
         public string player_id;
         public string slot;
         public string data;
@@ -29,6 +30,7 @@ namespace Asobi
     [Serializable]
     public class StorageObject
     {
+        public string id;
         public string collection;
         public string key;
         public string player_id;
