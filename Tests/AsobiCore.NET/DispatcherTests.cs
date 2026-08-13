@@ -30,6 +30,7 @@ namespace Asobi.Tests
             { "game.message", nameof(AsobiDispatcher.OnGameMessage) },
             { "module.error", nameof(AsobiDispatcher.OnGameError) },
             { "module.message", nameof(AsobiDispatcher.OnGameMessage) },
+            { "module.event", nameof(AsobiDispatcher.OnModuleEvent) },
             { "session.connected", nameof(AsobiDispatcher.OnConnected) },
             { "session.heartbeat", nameof(AsobiDispatcher.OnHeartbeat) },
             { "match.state", nameof(AsobiDispatcher.OnMatchState) },
@@ -276,6 +277,59 @@ namespace Asobi.Tests
         class GameMessageEnvelope
         {
             public WsGameMessagePayload payload;
+        }
+
+        // module.event surfaces the whole {module, event, data} payload so the
+        // app can route on payload.event. Unlike module.message it has no
+        // game.* twin.
+        [Test]
+        public void ModuleEventDispatchesWithFields()
+        {
+            var raw = LoadFixture("module.event");
+            Assert.That(raw, Is.Not.Null.And.Not.Empty, "fixture for 'module.event' missing under Fixtures/");
+
+            var dispatcher = new AsobiDispatcher();
+            string received = null;
+            dispatcher.OnModuleEvent += payload => received = payload;
+
+            dispatcher.HandleMessage(raw);
+
+            Assert.That(received, Is.Not.Null, "module.event did not fire OnModuleEvent");
+
+            var envelope = JsonSerializer.Deserialize<ModuleEventEnvelope>(received, Opts);
+            Assert.That(envelope, Is.Not.Null);
+            Assert.That(envelope.payload, Is.Not.Null);
+            Assert.That(envelope.payload.module, Is.EqualTo("quests"));
+            Assert.That(envelope.payload.@event, Is.EqualTo("quests.completed"));
+            var data = (JsonElement)envelope.payload.data;
+            Assert.That(data.GetProperty("quest_id").GetString(), Is.EqualTo("01j8x000000000000000000042"));
+            Assert.That(data.GetProperty("reward").GetInt32(), Is.EqualTo(250));
+        }
+
+        // The inner `event` name is data the app routes on, not a dispatch
+        // gate. An unfamiliar event still reaches OnModuleEvent - load-bearing
+        // for the frozen-at-1.0 wire, so an extension can ship a new event name
+        // without waiting on an SDK release.
+        [Test]
+        public void ModuleEventWithUnknownInnerEventStillDispatches()
+        {
+            var raw = "{\"type\":\"module.event\",\"payload\":{\"module\":\"mystery\",\"event\":\"mystery.happened\",\"data\":{\"n\":1}}}";
+
+            var dispatcher = new AsobiDispatcher();
+            string received = null;
+            dispatcher.OnModuleEvent += payload => received = payload;
+
+            dispatcher.HandleMessage(raw);
+
+            Assert.That(received, Is.Not.Null, "unknown inner event should still fire OnModuleEvent");
+
+            var envelope = JsonSerializer.Deserialize<ModuleEventEnvelope>(received, Opts);
+            Assert.That(envelope.payload.@event, Is.EqualTo("mystery.happened"));
+        }
+
+        class ModuleEventEnvelope
+        {
+            public WsModuleEventPayload payload;
         }
 
         // ---- helpers ----

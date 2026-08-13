@@ -139,4 +139,19 @@ namespace Asobi
     {
         public object message;
     }
+
+    // Sent when a server extension pushes a named event with
+    // module.event(name, data). The app routes on `event`; `data` is the
+    // extension's arbitrary JSON payload. `data` is typed `object` for the
+    // same reason as WsGameMessagePayload.message: System.Text.Json boxes it
+    // as a JsonElement, while Unity's JsonUtility silently drops it - a
+    // JsonUtility consumer reads it via JsonHelper.ExtractField(payloadJson,
+    // "data").
+    [Serializable]
+    public class WsModuleEventPayload
+    {
+        public string module;
+        public string @event;
+        public object data;
+    }
 }

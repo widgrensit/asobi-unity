@@ -36,6 +36,7 @@ namespace Asobi
         public event Action<string> OnError;
         public event Action<string> OnGameError;
         public event Action<string> OnGameMessage;
+        public event Action<string> OnModuleEvent;
         public event Action<string> OnHeartbeat;
         public event Action<string> OnMatchFinished;
         public event Action<string> OnMatchmakerExpired;
@@ -174,6 +175,15 @@ namespace Asobi
                 case "game.message":
                 case "module.message":
                     OnGameMessage?.Invoke(raw);
+                    break;
+                // A named push from a server extension. Unlike module.message
+                // it has no game.* twin, so it is a single case, not an alias
+                // pair. The whole payload {module, event, data} is surfaced;
+                // the app routes on payload.event, which is data rather than a
+                // dispatch gate - an unfamiliar event name still surfaces here
+                // instead of falling through to default.
+                case "module.event":
+                    OnModuleEvent?.Invoke(raw);
                     break;
                 default:
                     if (env.Type.StartsWith("match."))
