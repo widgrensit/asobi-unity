@@ -258,10 +258,14 @@ namespace Asobi
             return SendAsync("world.leave", "{}");
         }
 
-        public Task WorldInputAsync(string data)
+        // Pass `seq` - a per-input sequence number your client increments - to
+        // opt into world.ack reconciliation; the server echoes back the highest
+        // seq it has consumed on OnWorldAck. Stamped as a top-level sibling of
+        // payload only when provided.
+        public Task WorldInputAsync(string data, long? seq = null)
         {
             var payload = JsonUtility.ToJson(new WsMatchInputPayload { data = data });
-            return SendFireAndForget("world.input", payload);
+            return SendFireAndForget("world.input", payload, seq);
         }
 
         // --- DM ---
@@ -309,9 +313,10 @@ namespace Asobi
             return await tcs.Task;
         }
 
-        async Task SendFireAndForget(string type, string payloadJson)
+        async Task SendFireAndForget(string type, string payloadJson, long? seq = null)
         {
-            var msg = $"{{\"type\":\"{type}\",\"payload\":{payloadJson}}}";
+            var seqPart = seq.HasValue ? $"\"seq\":{seq.Value}," : "";
+            var msg = $"{{\"type\":\"{type}\",{seqPart}\"payload\":{payloadJson}}}";
             var bytes = Encoding.UTF8.GetBytes(msg);
             await _ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, _cts.Token);
         }

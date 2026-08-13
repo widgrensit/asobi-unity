@@ -154,4 +154,16 @@ namespace Asobi
         public string @event;
         public object data;
     }
+
+    // Sent on world.ack: the server's acknowledgement of the highest
+    // world.input `seq` it has consumed for you as of `tick`. Sent only to
+    // connections that stamped a `seq` on their input; use it to reconcile
+    // client-side prediction. Both fields are numeric, so JsonUtility parses
+    // them directly - no ExtractField escape hatch needed.
+    [Serializable]
+    public class WsWorldAckPayload
+    {
+        public long tick;
+        public long seq;
+    }
 }

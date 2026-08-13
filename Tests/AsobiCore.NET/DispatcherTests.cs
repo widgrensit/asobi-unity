@@ -56,6 +56,7 @@ namespace Asobi.Tests
             { "vote.cast_ok", nameof(AsobiDispatcher.OnVoteCastOk) },
             { "vote.veto_ok", nameof(AsobiDispatcher.OnVoteVetoOk) },
             { "world.tick", nameof(AsobiDispatcher.OnWorldTick) },
+            { "world.ack", nameof(AsobiDispatcher.OnWorldAck) },
             { "world.terrain", nameof(AsobiDispatcher.OnWorldTerrain) },
             { "world.list", nameof(AsobiDispatcher.OnWorldList) },
             { "world.joined", nameof(AsobiDispatcher.OnWorldJoined) },
@@ -330,6 +331,35 @@ namespace Asobi.Tests
         class ModuleEventEnvelope
         {
             public WsModuleEventPayload payload;
+        }
+
+        // world.ack surfaces {tick, seq} - the server's ack of the highest
+        // world.input seq it consumed as of tick. Both numeric, so unlike
+        // module.event's object data they deserialize directly.
+        [Test]
+        public void WorldAckDispatchesWithFields()
+        {
+            var raw = LoadFixture("world.ack");
+            Assert.That(raw, Is.Not.Null.And.Not.Empty, "fixture for 'world.ack' missing under Fixtures/");
+
+            var dispatcher = new AsobiDispatcher();
+            string received = null;
+            dispatcher.OnWorldAck += payload => received = payload;
+
+            dispatcher.HandleMessage(raw);
+
+            Assert.That(received, Is.Not.Null, "world.ack did not fire OnWorldAck");
+
+            var envelope = JsonSerializer.Deserialize<WorldAckEnvelope>(received, Opts);
+            Assert.That(envelope, Is.Not.Null);
+            Assert.That(envelope.payload, Is.Not.Null);
+            Assert.That(envelope.payload.tick, Is.EqualTo(42));
+            Assert.That(envelope.payload.seq, Is.EqualTo(412));
+        }
+
+        class WorldAckEnvelope
+        {
+            public WsWorldAckPayload payload;
         }
 
         // ---- helpers ----

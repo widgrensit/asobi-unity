@@ -54,6 +54,7 @@ namespace Asobi.Tests
             { "vote.cast_ok", nameof(AsobiRealtime.OnVoteCastOk) },
             { "vote.veto_ok", nameof(AsobiRealtime.OnVoteVetoOk) },
             { "world.tick", nameof(AsobiRealtime.OnWorldTick) },
+            { "world.ack", nameof(AsobiRealtime.OnWorldAck) },
             { "world.terrain", nameof(AsobiRealtime.OnWorldTerrain) },
             { "world.list", nameof(AsobiRealtime.OnWorldList) },
             { "world.joined", nameof(AsobiRealtime.OnWorldJoined) },
@@ -233,6 +234,29 @@ namespace Asobi.Tests
 
             var payload = JsonUtility.FromJson<WsModuleEventPayload>(ExtractPayloadJson(received));
             Assert.That(payload.@event, Is.EqualTo("mystery.happened"));
+        }
+
+        // world.ack surfaces {tick, seq} - the server's ack of the highest
+        // world.input seq it consumed as of tick. Both are numeric, so
+        // JsonUtility parses them directly - no ExtractField escape hatch
+        // needed (unlike module.event's object-typed data).
+        [Test]
+        public void WorldAckDispatchesWithFields()
+        {
+            var raw = LoadFixture("world.ack");
+            Assert.That(raw, Is.Not.Null.And.Not.Empty, "fixture for 'world.ack' missing under Resources/Fixtures/");
+
+            var realtime = new AsobiRealtime();
+            string received = null;
+            realtime.OnWorldAck += payload => received = payload;
+
+            realtime.HandleMessage(raw);
+
+            Assert.That(received, Is.Not.Null, "world.ack did not fire OnWorldAck");
+
+            var payload = JsonUtility.FromJson<WsWorldAckPayload>(ExtractPayloadJson(received));
+            Assert.That(payload.tick, Is.EqualTo(42));
+            Assert.That(payload.seq, Is.EqualTo(412));
         }
 
         // ---- helpers ----
