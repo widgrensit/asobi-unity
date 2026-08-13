@@ -18,6 +18,7 @@ namespace Asobi
         public event Action<string> OnVoteResult;
         public event Action<string> OnVoteVetoed;
         public event Action<string> OnWorldTick;
+        public event Action<string> OnWorldAck;
         public event Action<string> OnWorldTerrain;
         public event Action<string> OnWorldJoined;
         public event Action<string> OnWorldLeft;
@@ -107,6 +108,13 @@ namespace Asobi
                     break;
                 case "world.tick":
                     OnWorldTick?.Invoke(raw);
+                    break;
+                // Explicit case before the generic "world." catch-all in
+                // default: reclaims world.ack, which otherwise falls through
+                // to OnWorldEvent as name "ack". Harmless reroute - the frame
+                // is new in core v0.84.0.
+                case "world.ack":
+                    OnWorldAck?.Invoke(raw);
                     break;
                 case "world.terrain":
                     OnWorldTerrain?.Invoke(raw);
