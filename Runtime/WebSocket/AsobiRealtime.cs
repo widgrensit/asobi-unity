@@ -258,14 +258,18 @@ namespace Asobi
             return SendAsync("world.leave", "{}");
         }
 
+        // `inputJson` is the input map itself: world.input takes the payload
+        // verbatim. Unlike match.input it does not JSON-decode an inner `data`
+        // string, so a wrapped input reaches the zone as an empty map.
+        //
         // Pass `seq` - a per-input sequence number your client increments - to
         // opt into world.ack reconciliation; the server echoes back the highest
         // seq it has consumed on OnWorldAck. Stamped as a top-level sibling of
         // payload only when provided.
-        public Task WorldInputAsync(string data, long? seq = null)
+        public Task WorldInputAsync(string inputJson, long? seq = null)
         {
-            var payload = JsonUtility.ToJson(new WsMatchInputPayload { data = data });
-            return SendFireAndForget("world.input", payload, seq);
+            if (string.IsNullOrEmpty(inputJson)) inputJson = "{}";
+            return SendFireAndForget("world.input", inputJson, seq);
         }
 
         // --- DM ---
@@ -315,8 +319,7 @@ namespace Asobi
 
         async Task SendFireAndForget(string type, string payloadJson, long? seq = null)
         {
-            var seqPart = seq.HasValue ? $"\"seq\":{seq.Value}," : "";
-            var msg = $"{{\"type\":\"{type}\",{seqPart}\"payload\":{payloadJson}}}";
+            var msg = WsFrame.FireAndForget(type, payloadJson, seq);
             var bytes = Encoding.UTF8.GetBytes(msg);
             await _ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, _cts.Token);
         }
