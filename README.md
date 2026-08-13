@@ -203,14 +203,23 @@ inside it:
 `OnWorldTick` carries deltas: `payload.updates` is a list of `{op, id, ...}`
 entries, where `a` adds an entity with every field, `u` carries only the fields
 that changed, and `r` removes it. A zone sends a full `a` snapshot of its
-entities the first time it enters your view, and a zone holding no entities
-sends nothing at all, so joining delivers one frame per loaded, non-empty zone
-in your interest ring rather than a single snapshot. At the default
-`view_radius` of `1` that ring is the 3x3 block of zones around you, so a
-one-step crossing usually delivers no new snapshot at all: the destination was
-already in the ring, and re-subscribing to it is a no-op. New snapshots arrive
-only when a zone enters the ring for the first time, and a zone dropping out of
-it sends `r` for each of its entities. Everything else is a delta, so
+entities on every new subscription, meaning every time you are added to that
+zone's subscriber set and not only the first time. At the default `view_radius`
+of `1` you are subscribed to the 3x3 block of zones around you, so joining
+delivers one frame per loaded, non-empty zone in that ring rather than a single
+snapshot.
+
+A crossing re-snapshots too. The server recomputes the ring, unsubscribes the
+band that dropped out of it and subscribes the band that just entered, and each
+newly subscribed zone replays its full snapshot. Only the destination zone is
+exempt: at radius `1` it was already in the old ring, so re-subscribing to it
+takes an idempotent no-op branch. Leaving the ring sends `r` for each of that
+zone's entities, and walking back in re-subscribes you and replays the whole
+snapshot, so a player oscillating across a boundary re-snapshots on every pass.
+
+A zone holding no entities sends no snapshot, but the terrain push is a
+separate, unconditional step, so a world with a terrain provider still delivers
+that zone's chunk to `OnWorldTerrain`. Everything else is a delta, so
 accumulate every tick into your own state map (the entries are heterogeneous,
 so parse them with Newtonsoft.Json rather than `JsonUtility`):
 
@@ -293,12 +302,15 @@ are your game's.
   as normal, and only the acknowledgement is skipped; if you already have a
   valid `seq` on record the acks keep arriving every broadcast tick carrying
   that older high-water mark rather than falling silent.
-- `broadcast_interval` gates each zone's broadcast, not the connection. Every
-  `broadcast_interval` simulation ticks, `3` by default, each subscribed zone
-  emits its own pair, so a full 3x3 ring is up to nine `world.tick` frames and
-  nine `world.ack` frames rather than one of each. Subscription snapshots are
-  sent immediately and ignore the interval. Set it to `1` in the world mode
-  config for an ack every tick. See the
+- `broadcast_interval` is a world-level value copied into each zone's config,
+  and one ticker per world fans a single shared tick number out to every zone,
+  so zones are not on independent schedules. Every `broadcast_interval`
+  simulation ticks, `3` by default, each subscribed zone emits its own pair, so
+  a full 3x3 ring is up to nine `world.tick` frames and nine `world.ack` frames
+  rather than one of each, and they land together on the same broadcast tick
+  rather than interleaved across cadences. Subscription snapshots are sent
+  immediately and ignore the interval. Set it to `1` in the world mode config
+  for an ack every tick. See the
   [world server guide](https://asobi.dev/docs/world-server).
 - Needs a server carrying `world.ack`, which is asobi core v0.84.0 or newer. An
   older one sends nothing, and the silence is the only symptom.
