@@ -28,6 +28,7 @@ namespace Asobi.Tests
             { "error", nameof(AsobiRealtime.OnError) },
             { "game.error", nameof(AsobiRealtime.OnGameError) },
             { "game.message", nameof(AsobiRealtime.OnGameMessage) },
+            { "module.event", nameof(AsobiRealtime.OnModuleEvent) },
             { "session.connected", nameof(AsobiRealtime.OnConnected) },
             { "session.heartbeat", nameof(AsobiRealtime.OnHeartbeat) },
             { "match.state", nameof(AsobiRealtime.OnMatchState) },
@@ -183,6 +184,55 @@ namespace Asobi.Tests
             var payloadJson = ExtractPayloadJson(received);
             var extracted = JsonHelper.ExtractField(payloadJson, "message");
             Assert.That(extracted, Is.EqualTo("\"jij bent speler nummer 3\""));
+        }
+
+        // module.event surfaces the whole {module, event, data} payload so the
+        // app can route on payload.event. Unlike module.message it has no
+        // game.* twin.
+        [Test]
+        public void ModuleEventDispatchesWithFields()
+        {
+            var raw = LoadFixture("module.event");
+            Assert.That(raw, Is.Not.Null.And.Not.Empty, "fixture for 'module.event' missing under Resources/Fixtures/");
+
+            var realtime = new AsobiRealtime();
+            string received = null;
+            realtime.OnModuleEvent += payload => received = payload;
+
+            realtime.HandleMessage(raw);
+
+            Assert.That(received, Is.Not.Null, "module.event did not fire OnModuleEvent");
+
+            var payloadJson = ExtractPayloadJson(received);
+            var payload = JsonUtility.FromJson<WsModuleEventPayload>(payloadJson);
+            Assert.That(payload.module, Is.EqualTo("quests"));
+            Assert.That(payload.@event, Is.EqualTo("quests.completed"));
+
+            // data is object-typed, so JsonUtility drops it (see
+            // WsModuleEventPayload); read the raw slice like game.message does.
+            var data = JsonHelper.ExtractField(payloadJson, "data");
+            Assert.That(JsonHelper.ExtractField(data, "reward"), Is.EqualTo("250"));
+        }
+
+        // The inner `event` name is data the app routes on, not a dispatch
+        // gate. An unfamiliar event still reaches OnModuleEvent - load-bearing
+        // for the frozen-at-1.0 wire, so an extension can ship a new event name
+        // without waiting on an SDK release.
+        [Test]
+        public void ModuleEventWithUnknownInnerEventStillDispatches()
+        {
+            var raw = "{\"type\":\"module.event\",\"payload\":{\"module\":\"mystery\",\"event\":\"mystery.happened\",\"data\":{\"n\":1}}}";
+
+            var realtime = new AsobiRealtime();
+            string received = null;
+            realtime.OnModuleEvent += payload => received = payload;
+
+            realtime.HandleMessage(raw);
+
+            Assert.That(received, Is.Not.Null, "unknown inner event should still fire OnModuleEvent");
+
+            var payload = JsonUtility.FromJson<WsModuleEventPayload>(ExtractPayloadJson(received));
+            Assert.That(payload.@event, Is.EqualTo("mystery.happened"));
         }
 
         // ---- helpers ----
