@@ -202,12 +202,17 @@ inside it:
 
 `OnWorldTick` carries deltas: `payload.updates` is a list of `{op, id, ...}`
 entries, where `a` adds an entity with every field, `u` carries only the fields
-that changed, and `r` removes it. Every zone subscription opens with a full `a`
-snapshot of that zone's entities, so you get one on joining and another each
-time you cross into a new zone, while a zone dropping out of view sends `r` for
-each of its entities. Everything in between is a delta, so accumulate every tick
-into your own state map (the entries are heterogeneous, so parse them with
-Newtonsoft.Json rather than `JsonUtility`):
+that changed, and `r` removes it. A zone sends a full `a` snapshot of its
+entities the first time it enters your view, and a zone holding no entities
+sends nothing at all, so joining delivers one frame per loaded, non-empty zone
+in your interest ring rather than a single snapshot. At the default
+`view_radius` of `1` that ring is the 3x3 block of zones around you, so a
+one-step crossing usually delivers no new snapshot at all: the destination was
+already in the ring, and re-subscribing to it is a no-op. New snapshots arrive
+only when a zone enters the ring for the first time, and a zone dropping out of
+it sends `r` for each of its entities. Everything else is a delta, so
+accumulate every tick into your own state map (the entries are heterogeneous,
+so parse them with Newtonsoft.Json rather than `JsonUtility`):
 
 ```csharp
 readonly Dictionary<string, Dictionary<string, object>> _state = new();
@@ -223,26 +228,45 @@ client.Realtime.OnWorldTick += raw =>
 };
 ```
 
-The server answers on that connection alone with `world.ack`, carrying the
-highest `seq` it has consumed for you as of `tick`:
+The server answers with `world.ack`, carrying the highest `seq` it has consumed
+for you as of `tick`:
 
 ```json
 {"type":"world.ack","payload":{"tick":42,"seq":412}}
 ```
 
+That mark is held per zone, not per connection, and every zone you are
+subscribed to acks you independently. Inputs only ever reach the zone you are
+standing in, so once you have crossed a boundary you get more than one
+`world.ack` per broadcast: the zone you left keeps emitting the frozen mark it
+recorded before you moved, so `payload.seq` can go backwards between
+consecutive acks. Nothing in the frame says which zone sent it. Keep a running
+maximum and ignore any ack that does not exceed it. Dropping everything at or
+below `ack.seq` is only safe against a mark that never moves backwards; prune
+straight from the received `seq` and you re-apply inputs the server has already
+consumed. Tracked as
+[widgrensit/asobi#477](https://github.com/widgrensit/asobi/issues/477), which
+also covers the "per-connection" wording the server source and the protocol
+guide still carry.
+
 `OnWorldAck` hands you the raw envelope, so pull out `payload` before
 deserializing into `WsWorldAckPayload` (`long tick`, `long seq`); passing the
-envelope straight to `JsonUtility` yields zeros, not an error. Drop every
-buffered input at or below `ack.seq`, rewind to the accumulated state, replay
-the rest:
+envelope straight to `JsonUtility` yields zeros, not an error. Advance the
+running maximum, drop every buffered input at or below it, rewind to the
+accumulated state, replay the rest:
 
 ```csharp
+long _acked = -1;
+
 client.Realtime.OnWorldAck += raw =>
 {
     var ack = JsonUtility.FromJson<WsWorldAckPayload>(
         JsonHelper.ExtractField(raw, "payload"));
 
-    _pending.RemoveAll(p => p.seq <= ack.seq);
+    if (ack.seq <= _acked) return;
+    _acked = ack.seq;
+
+    _pending.RemoveAll(p => p.seq <= _acked);
     ResetTo(_state);
     foreach (var p in _pending)
         Predict(p.input);
@@ -254,24 +278,27 @@ are your game's.
 
 - The ack is a high-water mark, not a receipt per input. A rejected input still
   advances it, so an input the world script declines never strands the client.
-- Prune and replay in the ack handler, never in the tick handler. When a
-  broadcast tick has deltas the server sends `world.tick` first and `world.ack`
-  second on the same connection, but a tick with nothing to report is skipped
-  entirely, so an ack can arrive with no `world.tick` in front of it.
+- Prune and replay in the ack handler, never in the tick handler. A zone with
+  deltas to report sends its `world.tick` first and its `world.ack` second, but
+  a broadcast with nothing to report skips the tick entirely, so an ack can
+  arrive with no `world.tick` in front of it.
 - Acknowledgement is opt-in. The server records a `seq` only for players who
   stamp one, so a client that never stamps one gets no `world.ack` at all, and
   no error either.
-- The ack is a per-connection frame and never rides the shared `world.tick`
-  broadcast, so the two arrive as separate messages.
+- The ack never rides the shared `world.tick` broadcast. It is addressed to you
+  alone, so the two always arrive as separate messages.
 - `seq` must be a non-negative integer below 2^53, narrower than C#'s `long`:
   count up from zero, never seed from a nanosecond timestamp. An out-of-range
   `seq` is ignored, but the input is not. It is queued and applied to the world
   as normal, and only the acknowledgement is skipped; if you already have a
   valid `seq` on record the acks keep arriving every broadcast tick carrying
   that older high-water mark rather than falling silent.
-- Subscription snapshots aside, both frames go out every `broadcast_interval`
-  simulation ticks, `3` by default; set it to `1` in the world mode config for
-  an ack every tick. See the
+- `broadcast_interval` gates each zone's broadcast, not the connection. Every
+  `broadcast_interval` simulation ticks, `3` by default, each subscribed zone
+  emits its own pair, so a full 3x3 ring is up to nine `world.tick` frames and
+  nine `world.ack` frames rather than one of each. Subscription snapshots are
+  sent immediately and ignore the interval. Set it to `1` in the world mode
+  config for an ack every tick. See the
   [world server guide](https://asobi.dev/docs/world-server).
 - Needs a server carrying `world.ack`, which is asobi core v0.84.0 or newer. An
   older one sends nothing, and the silence is the only symptom.
