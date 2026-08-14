@@ -109,5 +109,45 @@ namespace Asobi.Tests
         {
             Assert.That(() => WsFrame.WorldInputPayload(input), Throws.ArgumentException);
         }
+
+        [Test]
+        public void AMalformedOrTrailingPayloadIsRejected()
+        {
+            // Every one of these passed the old first-character guard.
+            foreach (var bad in new[]
+                     {
+                     "{",                      // unterminated
+                     "{\"a\":1",              // unterminated with content
+                     "{}}",                    // trailing brace
+                     "{},\"cid\":\"9\"",       // injects a cid
+                     "{},\"seq\":999",         // injects a seq the client never stamped
+                     "{\"a\":1} trailing",     // trailing text
+                     "\u00A0{\"a\":1}",        // non-breaking space is not JSON whitespace
+                     "{\"a\":\"unterminated}"  // brace inside an unterminated string
+                 })
+            {
+                Assert.That(
+                    () => WsFrame.WorldInputPayload(bad),
+                    Throws.ArgumentException,
+                    $"expected rejection for: {bad}");
+            }
+        }
+
+        [Test]
+        public void BracesInsideStringsDoNotUnbalanceTheScan()
+        {
+            const string payload = "{\"chat\":\"} not the end {\",\"x\":1}";
+            Assert.That(WsFrame.WorldInputPayload(payload), Is.EqualTo(payload));
+
+            const string escaped = "{\"quote\":\"a \\\" brace } here\"}";
+            Assert.That(WsFrame.WorldInputPayload(escaped), Is.EqualTo(escaped));
+        }
+
+        [Test]
+        public void NestedObjectsAndTrailingJsonWhitespaceAreAccepted()
+        {
+            Assert.That(WsFrame.WorldInputPayload("{\"a\":{\"b\":[1,2]}}"), Is.EqualTo("{\"a\":{\"b\":[1,2]}}"));
+            Assert.That(WsFrame.WorldInputPayload(" {\"a\":1} \n"), Is.EqualTo(" {\"a\":1} \n"));
+        }
     }
 }

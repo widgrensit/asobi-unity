@@ -45,16 +45,72 @@ namespace Asobi
         /// </exception>
         internal static string WorldInputPayload(string inputJson)
         {
-            if (string.IsNullOrWhiteSpace(inputJson)) return "{}";
-
-            var i = 0;
-            while (char.IsWhiteSpace(inputJson[i])) i++;
-            if (inputJson[i] != '{')
+            if (IsBlank(inputJson)) return "{}";
+            if (!IsSingleJsonObject(inputJson))
                 throw new ArgumentException(
-                    "world.input takes a JSON object: the payload is the input map itself, so an array, a bare value or non-JSON text cannot be sent.",
+                    "world.input takes a single JSON object: the payload is the input map itself, so an array, a bare value, trailing text or unbalanced braces cannot be sent.",
                     nameof(inputJson));
 
             return inputJson;
+        }
+
+        // JSON's own whitespace set, not char.IsWhiteSpace: U+00A0 and friends are
+        // not legal between tokens, and letting one through puts a byte the server's
+        // decoder rejects right before the payload.
+        static bool IsJsonSpace(char c) => c == ' ' || c == '\t' || c == '\n' || c == '\r';
+
+        static bool IsBlank(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return true;
+            foreach (var c in s)
+                if (!IsJsonSpace(c))
+                    return false;
+            return true;
+        }
+
+        // The payload is spliced into the frame unparsed, so "starts with {" is not
+        // enough: `{},"seq":9` passes that and injects a top-level frame field the
+        // client never stamped, which world.ack would then acknowledge. Walk the
+        // whole string and require exactly one balanced object with nothing after it.
+        static bool IsSingleJsonObject(string s)
+        {
+            var i = 0;
+            while (i < s.Length && IsJsonSpace(s[i])) i++;
+            if (i >= s.Length || s[i] != '{') return false;
+
+            var depth = 0;
+            var inString = false;
+            var escaped = false;
+
+            for (; i < s.Length; i++)
+            {
+                var c = s[i];
+
+                if (inString)
+                {
+                    if (escaped) escaped = false;
+                    else if (c == '\\') escaped = true;
+                    else if (c == '"') inString = false;
+                    continue;
+                }
+
+                if (c == '"') inString = true;
+                else if (c == '{') depth++;
+                else if (c == '}')
+                {
+                    depth--;
+                    if (depth == 0) break;
+                    if (depth < 0) return false;
+                }
+            }
+
+            if (depth != 0 || inString) return false;
+
+            for (i++; i < s.Length; i++)
+                if (!IsJsonSpace(s[i]))
+                    return false;
+
+            return true;
         }
     }
 }
