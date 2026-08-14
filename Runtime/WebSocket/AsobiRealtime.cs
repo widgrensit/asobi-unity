@@ -150,8 +150,8 @@ namespace Asobi
         /// The match twin of <see cref="WorldFindOrCreateAsync"/>.
         /// </summary>
         /// <param name="mode">
-        /// The match mode. The only field the frame takes - every other match
-        /// parameter comes from server-side mode config.
+        /// The match mode. Match parameters are not client-chosen: size, min
+        /// players and the rest come from the server-side mode config.
         /// </param>
         /// <returns>
         /// The raw <c>match.joined</c> envelope, the same frame
@@ -159,20 +159,44 @@ namespace Asobi
         /// exactly as that one does.
         /// </returns>
         /// <remarks>
-        /// Prefer this to <see cref="MatchListAsync"/> followed by
-        /// <see cref="JoinMatchAsync"/>: browse-then-join races, and two clients
-        /// reading the same empty listing each create a match. This resolves
-        /// server-side and is serialized, so simultaneous callers converge on
-        /// one match.
+        /// Reach for this when you want a player in a match now.
+        /// <see cref="MatchListAsync"/> followed by
+        /// <see cref="JoinMatchAsync"/> can only join a match that already
+        /// exists, and no client call spawns one: the matchmaker spawns only
+        /// once it has grouped enough co-queued tickets, and it never drops a
+        /// player into a running match. So before this frame an empty listing
+        /// left the caller with nothing but the queue. This finds a live match
+        /// or spawns one, resolved server-side and serialized, so simultaneous
+        /// callers converge on one match.
         ///
         /// A mode opts into it with <c>quick_play</c>, which defaults to false
         /// for match modes; a mode that has not opted in is refused with
         /// <c>quick_play_disabled</c>. That is a separate axis from
-        /// <c>listed</c>, which only decides browser visibility. Other refusals
-        /// a caller can see: <c>match_capacity_reached</c> (node-wide cap),
-        /// <c>wrong_mode_type</c> (a world mode), and <c>join_rate_limited</c>
-        /// (the same bucket as <see cref="JoinMatchAsync"/> and
-        /// <see cref="WorldJoinAsync"/>).
+        /// <c>listed</c>, which only decides browser visibility.
+        ///
+        /// Refusals include <c>not_found</c> (the mode is unknown or not
+        /// configured, so a misspelt name lands here), <c>quick_play_disabled</c>,
+        /// <c>wrong_mode_type</c> (a world mode), <c>match_capacity_reached</c>
+        /// (node-wide cap) and <c>join_rate_limited</c> (the same bucket as
+        /// <see cref="JoinMatchAsync"/> and <see cref="WorldJoinAsync"/>). More
+        /// can be added, so treat an unrecognised reason as a refusal as well.
+        ///
+        /// A refusal faults the task with <see cref="AsobiException"/>, whose
+        /// <c>StatusCode</c> is always -1 for a WebSocket error frame and so
+        /// carries nothing. The reason is <c>payload.reason</c> in the raw
+        /// envelope, which is what <c>Message</c> holds. Read it with the SDK's
+        /// own scanner:
+        /// <code>
+        /// catch (AsobiException ex)
+        /// {
+        ///     var payload = JsonScan.ExtractField(ex.Message, "payload");
+        ///     var reason = JsonScan.Unquote(JsonScan.ExtractField(payload, "reason"));
+        ///     if (reason == "quick_play_disabled") ShowModeClosed();
+        /// }
+        /// </code>
+        /// Branch on that, not on <c>payload.error.code</c>: the code is the
+        /// mapped one, <c>ws.request_failed</c> for every refusal here bar
+        /// <c>join_rate_limited</c>, so it cannot tell them apart.
         ///
         /// Requires asobi core v0.86.0 or later.
         /// </remarks>
