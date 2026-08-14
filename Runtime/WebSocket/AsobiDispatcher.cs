@@ -112,7 +112,7 @@ namespace Asobi
                 // Explicit case before the generic "world." catch-all in
                 // default: reclaims world.ack, which otherwise falls through
                 // to OnWorldEvent as name "ack". Harmless reroute - the frame
-                // is new in core v0.84.0.
+                // is new in core v0.84.1.
                 case "world.ack":
                     OnWorldAck?.Invoke(raw);
                     break;
