@@ -145,6 +145,88 @@ namespace Asobi
             return SendAsync("match.list", payload);
         }
 
+        /// <summary>
+        /// Get into a live match of a mode, spawning one if there is none.
+        /// The match twin of <see cref="WorldFindOrCreateAsync"/>.
+        /// </summary>
+        /// <param name="mode">
+        /// The match mode. Match parameters are not client-chosen: size, min
+        /// players and the rest come from the server-side mode config.
+        /// </param>
+        /// <returns>
+        /// The raw <c>match.joined</c> envelope, the same frame
+        /// <see cref="JoinMatchAsync"/> replies with, so the reply routes
+        /// exactly as that one does.
+        /// </returns>
+        /// <remarks>
+        /// Reach for this when you want a player in a match now.
+        /// <see cref="MatchListAsync"/> followed by
+        /// <see cref="JoinMatchAsync"/> can only join a match that already
+        /// exists, and no client call spawns one: the matchmaker spawns only
+        /// once it has grouped enough co-queued tickets, and it never drops a
+        /// player into a running match. So before this frame an empty listing
+        /// left the caller with nothing but the queue. This finds a live match
+        /// or spawns one, resolved server-side and serialized, so simultaneous
+        /// callers converge on one match.
+        ///
+        /// A mode opts into it with <c>quick_play</c>, which defaults to false
+        /// for match modes; a mode that has not opted in is refused with
+        /// <c>quick_play_disabled</c>. That is a separate axis from
+        /// <c>listed</c>, which only decides browser visibility.
+        ///
+        /// Refusals include <c>not_found</c> (the mode is unknown or not
+        /// configured, so a misspelt name lands here), <c>quick_play_disabled</c>,
+        /// <c>wrong_mode_type</c> (a world mode), <c>match_capacity_reached</c>
+        /// (node-wide cap) and <c>join_rate_limited</c> (the same bucket as
+        /// <see cref="JoinMatchAsync"/> and <see cref="WorldJoinAsync"/>). More
+        /// can be added, so treat an unrecognised reason as a refusal as well.
+        ///
+        /// A refusal faults the task with <see cref="AsobiException"/>, whose
+        /// <c>StatusCode</c> is always -1 for a WebSocket error frame and so
+        /// carries nothing. The reason is <c>payload.reason</c> in the raw
+        /// envelope, which is what <c>Message</c> holds. Read it with the SDK's
+        /// own scanner:
+        /// <code>
+        /// catch (AsobiException ex)
+        /// {
+        ///     var payload = JsonScan.ExtractField(ex.Message, "payload");
+        ///     var reason = JsonScan.Unquote(JsonScan.ExtractField(payload, "reason"));
+        ///     if (reason == "quick_play_disabled") ShowModeClosed();
+        /// }
+        /// </code>
+        /// Branch on <c>payload.reason</c> rather than <c>payload.error.code</c>:
+        /// several reasons here share the generic <c>ws.request_failed</c> code,
+        /// though not all do - <c>join_refused</c>, <c>match_full</c> and
+        /// <c>match_locked</c> carry their own mapped codes. The reason string
+        /// is the one field that tells every refusal apart.
+        ///
+        /// One refusal has a second level worth reading. The lobby can refuse
+        /// before the join (<c>not_found</c>, <c>quick_play_disabled</c>,
+        /// <c>wrong_mode_type</c>, <c>match_capacity_reached</c>), and the join
+        /// itself can refuse after a match is found (<c>join_refused</c>,
+        /// <c>match_full</c>, <c>match_locked</c>). When a game's own
+        /// <c>join</c> script refuses, <c>reason</c> is the fixed literal
+        /// <c>join_refused</c> and the script's own wording is one level
+        /// deeper, at <c>payload.error.details.refused_reason</c> - a script
+        /// cannot mint an error code, so its text travels as a detail. That
+        /// string is the one to show a player:
+        /// <code>
+        /// if (reason == "join_refused")
+        /// {
+        ///     var error = JsonScan.ExtractField(payload, "error");
+        ///     var details = JsonScan.ExtractField(error, "details");
+        ///     ShowRefused(JsonScan.Unquote(JsonScan.ExtractField(details, "refused_reason")));
+        /// }
+        /// </code>
+        ///
+        /// Requires asobi core v0.86.0 or later.
+        /// </remarks>
+        public Task<string> MatchFindOrCreateAsync(string mode)
+        {
+            var payload = JsonUtility.ToJson(new WsMatchmakerPayload { mode = mode });
+            return SendAsync("match.find_or_create", payload);
+        }
+
         public Task<string> JoinMatchAsync(string matchId)
         {
             var payload = JsonUtility.ToJson(new WsMatchJoinPayload { match_id = matchId });

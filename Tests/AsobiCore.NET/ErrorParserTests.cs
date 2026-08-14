@@ -57,5 +57,25 @@ namespace Asobi.Tests
 
             Assert.That(err.error, Is.EqualTo("He said \"no\"."));
         }
+
+        // A WebSocket refusal faults the task with AsobiException carrying the
+        // raw envelope, so the reason is only readable off payload.reason. The
+        // nested error object maps most refusals onto one code, which is why
+        // MatchFindOrCreateAsync's doc points callers at the reason instead.
+        [Test]
+        public void AWsRefusalReasonIsReadFromThePayloadNotFromTheErrorCode()
+        {
+            const string raw =
+                "{\"type\":\"error\",\"payload\":{\"reason\":\"quick_play_disabled\"," +
+                "\"error\":{\"code\":\"ws.request_failed\"," +
+                "\"message\":\"The request failed. See `details.reason`.\"," +
+                "\"details\":{\"reason\":\"quick_play_disabled\"}}}}";
+
+            var payload = JsonScan.ExtractField(raw, "payload");
+            var reason = JsonScan.Unquote(JsonScan.ExtractField(payload, "reason"));
+
+            Assert.That(reason, Is.EqualTo("quick_play_disabled"));
+            Assert.That(AsobiErrorParser.Parse(raw).code, Is.EqualTo("ws.request_failed"));
+        }
     }
 }
