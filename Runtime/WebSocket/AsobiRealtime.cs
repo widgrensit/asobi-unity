@@ -145,6 +145,43 @@ namespace Asobi
             return SendAsync("match.list", payload);
         }
 
+        /// <summary>
+        /// Get into a live match of a mode, spawning one if there is none.
+        /// The match twin of <see cref="WorldFindOrCreateAsync"/>.
+        /// </summary>
+        /// <param name="mode">
+        /// The match mode. The only field the frame takes - every other match
+        /// parameter comes from server-side mode config.
+        /// </param>
+        /// <returns>
+        /// The raw <c>match.joined</c> envelope, the same frame
+        /// <see cref="JoinMatchAsync"/> replies with, so the reply routes
+        /// exactly as that one does.
+        /// </returns>
+        /// <remarks>
+        /// Prefer this to <see cref="MatchListAsync"/> followed by
+        /// <see cref="JoinMatchAsync"/>: browse-then-join races, and two clients
+        /// reading the same empty listing each create a match. This resolves
+        /// server-side and is serialized, so simultaneous callers converge on
+        /// one match.
+        ///
+        /// A mode opts into it with <c>quick_play</c>, which defaults to false
+        /// for match modes; a mode that has not opted in is refused with
+        /// <c>quick_play_disabled</c>. That is a separate axis from
+        /// <c>listed</c>, which only decides browser visibility. Other refusals
+        /// a caller can see: <c>match_capacity_reached</c> (node-wide cap),
+        /// <c>wrong_mode_type</c> (a world mode), and <c>join_rate_limited</c>
+        /// (the same bucket as <see cref="JoinMatchAsync"/> and
+        /// <see cref="WorldJoinAsync"/>).
+        ///
+        /// Requires asobi core v0.86.0 or later.
+        /// </remarks>
+        public Task<string> MatchFindOrCreateAsync(string mode)
+        {
+            var payload = JsonUtility.ToJson(new WsMatchmakerPayload { mode = mode });
+            return SendAsync("match.find_or_create", payload);
+        }
+
         public Task<string> JoinMatchAsync(string matchId)
         {
             var payload = JsonUtility.ToJson(new WsMatchJoinPayload { match_id = matchId });
