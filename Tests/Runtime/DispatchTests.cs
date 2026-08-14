@@ -237,9 +237,10 @@ namespace Asobi.Tests
         }
 
         // world.ack surfaces {tick, seq} - the server's ack of the highest
-        // world.input seq it consumed as of tick. Both are numeric, so
-        // JsonUtility parses them directly - no ExtractField escape hatch
-        // needed (unlike module.event's object-typed data).
+        // world.input seq it consumed as of tick. OnWorldAck hands over the
+        // raw envelope, so the payload has to be pulled out before
+        // JsonUtility sees it; from there both fields are numeric and parse
+        // directly.
         [Test]
         public void WorldAckDispatchesWithFields()
         {

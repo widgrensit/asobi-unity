@@ -334,8 +334,9 @@ namespace Asobi.Tests
         }
 
         // world.ack surfaces {tick, seq} - the server's ack of the highest
-        // world.input seq it consumed as of tick. Both numeric, so unlike
-        // module.event's object data they deserialize directly.
+        // world.input seq it consumed as of tick. OnWorldAck hands over the
+        // raw envelope, so it is deserialized through an envelope type; both
+        // payload fields are numeric.
         [Test]
         public void WorldAckDispatchesWithFields()
         {

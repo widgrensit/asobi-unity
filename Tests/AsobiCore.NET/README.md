@@ -9,12 +9,30 @@ Source files are shared via `<Compile Include="..\..\Runtime\..." Link="..."/>`
 in the csproj — no copies:
 - `Runtime/WebSocket/AsobiDispatcher.cs`
 - `Runtime/WebSocket/AsobiReconnectPolicy.cs`
+- `Runtime/WebSocket/WsFrame.cs`
 - `Runtime/Models/AuthModels.cs`, `Runtime/Models/RealtimeModels.cs`
 - `Runtime/DeviceCredential.cs`
 
 Fixtures under `Tests/Runtime/Resources/Fixtures/` are referenced via
 `<None Include="..." CopyToOutputDirectory>` and loaded at test time
 from `AppContext.BaseDirectory/Fixtures/`.
+
+## Outbound frame coverage
+
+The dispatcher half of the protocol is inbound. The outbound half - the
+envelope text and the `world.input` payload decision - lives in
+`WsFrame.cs`, which has no `UnityEngine` dependency for exactly this
+reason, so `WsFrameTests.cs` pins it here: `cid` and `seq` as siblings of
+`payload`, and a `world.input` payload that is the caller's object
+verbatim, an empty map when absent, and an `ArgumentException` when it is
+not an object.
+
+**Still not covered here:** that `AsobiRealtime` actually calls into
+`WsFrame`. Reverting `WorldInputAsync` to re-wrap its argument keeps this
+suite green, because `AsobiRealtime.cs` is not linked (see below) - the
+decision is pinned, the one-line delegation to it is not. Closing that
+needs a seam over `ClientWebSocket` so a test can read the frame that was
+written.
 
 ## Reconnection coverage
 
