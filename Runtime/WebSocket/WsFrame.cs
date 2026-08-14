@@ -37,10 +37,10 @@ namespace Asobi
         /// </summary>
         /// <exception cref="ArgumentException">
         /// The input is not a JSON object. Non-JSON text splices onto the wire
-        /// as a malformed frame, and an array or a bare value reaches the
-        /// server as a badmap; either way <c>world.input</c> carries no
-        /// <c>cid</c>, so there is nothing to correlate a rejection to and the
-        /// failure would be silent. Checked by first character rather than
+        /// as a malformed frame, and an array or a bare value draws an
+        /// <c>error</c> frame with reason <c>invalid_payload</c>; either way
+        /// <c>world.input</c> carries no <c>cid</c>, so there is nothing to
+        /// correlate the rejection to. Checked by first character rather than
         /// parsed: this runs once per input frame.
         /// </exception>
         internal static string WorldInputPayload(string inputJson)

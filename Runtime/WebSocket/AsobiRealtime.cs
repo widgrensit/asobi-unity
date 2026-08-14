@@ -260,13 +260,13 @@ namespace Asobi
 
         /// <summary>
         /// Send one input to the world you are in. Fire-and-forget: the frame
-        /// carries no <c>cid</c>, so the server has no way to report a bad
-        /// input back to you.
+        /// carries no <c>cid</c>, so a bad input draws an <c>error</c> frame
+        /// with reason <c>invalid_payload</c> that nothing ties back to it.
         /// </summary>
         /// <param name="inputJson">
         /// The input map itself, as a JSON object. <c>world.input</c> takes the
         /// payload verbatim and, unlike <c>match.input</c>, does not JSON-decode
-        /// an inner string, so a wrapped input reaches the zone as an empty map.
+        /// an inner string, so a wrapped input reaches the zone still wrapped.
         /// Null or blank sends an empty map.
         /// </param>
         /// <param name="seq">
@@ -277,14 +277,16 @@ namespace Asobi
         /// </param>
         /// <exception cref="ArgumentException">
         /// <paramref name="inputJson"/> is not a JSON object. Thrown on the
-        /// first offending frame rather than sent, because nothing downstream
-        /// could tell you about it.
+        /// first offending frame rather than sent, because the server answers
+        /// one with an uncorrelated <c>error</c> frame and nothing else.
         /// </exception>
         /// <remarks>
-        /// <c>data</c> is reserved at the top level of the input map: the
-        /// server unwraps it when it is a map, dropping every sibling key, and
-        /// discards the whole input when it is not. Name your fields anything
-        /// else (widgrensit/asobi#478).
+        /// <c>data</c> is reserved at the top level of the input map: a payload
+        /// whose sole key is <c>data</c> holding an object is unwrapped to that
+        /// object. Deprecated, and removed at the next protocol break, so name
+        /// your fields anything else (widgrensit/asobi#478). A <c>data</c>
+        /// alongside other keys, or one holding anything but an object, is
+        /// forwarded verbatim.
         /// </remarks>
         public Task WorldInputAsync(string inputJson, long? seq = null)
         {

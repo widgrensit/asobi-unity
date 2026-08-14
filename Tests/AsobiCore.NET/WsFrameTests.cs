@@ -77,9 +77,9 @@ namespace Asobi.Tests
         }
 
         // `data` is reserved at the top level (widgrensit/asobi#478): the
-        // server unwraps it when it is a map and drops the siblings. The SDK
-        // still sends it verbatim - quietly renaming or re-nesting it here
-        // would hide the server's rule instead of letting the game hit it.
+        // server unwraps a payload whose sole key is `data` holding an object.
+        // The SDK sends it verbatim either way - quietly renaming or re-nesting
+        // it here would hide the server's rule instead of letting the game hit it.
         [Test]
         public void ATopLevelDataKeyIsStillSentVerbatim()
         {
@@ -96,8 +96,8 @@ namespace Asobi.Tests
         }
 
         // Anything that is not an object either splices onto the wire as a
-        // malformed frame or reaches the server as a badmap. world.input has
-        // no cid, so neither can be reported back: throw on the developer's
+        // malformed frame or draws an invalid_payload error frame. world.input
+        // has no cid, so neither can be correlated back: throw on the developer's
         // first frame instead of failing silently for the life of the game.
         [TestCase("not json")]
         [TestCase("[1,2,3]")]

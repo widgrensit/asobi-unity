@@ -172,9 +172,11 @@ authoritative state from `OnWorldTick`.
 
 `WorldInputAsync(string inputJson, long? seq = null)` sends a JSON object that
 is itself the input map: the field names are your game's, and the server hands
-the map to the world script as it stands. One field name is reserved. If the
-map has a top-level `data`, the server substitutes it, so an object `data`
-becomes the input and a `data` that is anything else leaves the input empty.
+the map to the world script as it stands. One field name is reserved: a payload
+whose sole key is `data` holding an object is unwrapped to that object.
+Deprecated, and removed at the next protocol break, so name your fields
+anything else. A `data` alongside other keys, or a `data` holding anything but
+an object, is forwarded verbatim.
 
 Stamp each input with `seq`, a monotonic counter your client owns, to opt into
 acknowledgement. Buffer the input under that `seq` and apply it locally at once:
@@ -244,38 +246,19 @@ for you as of `tick`:
 {"type":"world.ack","payload":{"tick":42,"seq":412}}
 ```
 
-That mark is held per zone, not per connection, and every zone you are
-subscribed to acks you independently. Inputs only ever reach the zone you are
-standing in, so once you have crossed a boundary you get more than one
-`world.ack` per broadcast: the zone you left keeps emitting the frozen mark it
-recorded before you moved, so `payload.seq` can go backwards between
-consecutive acks. Nothing in the frame says which zone sent it. Keep a running
-maximum and ignore any ack that does not exceed it. Dropping everything at or
-below `ack.seq` is only safe against a mark that never moves backwards; prune
-straight from the received `seq` and you re-apply inputs the server has already
-consumed. Tracked as
-[widgrensit/asobi#477](https://github.com/widgrensit/asobi/issues/477), which
-also covers the "per-connection" wording the server source and the protocol
-guide still carry.
-
 `OnWorldAck` hands you the raw envelope, so pull out `payload` before
 deserializing into `WsWorldAckPayload` (`long tick`, `long seq`); passing the
-envelope straight to `JsonUtility` yields zeros, not an error. Advance the
-running maximum, drop every buffered input at or below it, rewind to the
-accumulated state, replay the rest:
+envelope straight to `JsonUtility` yields zeros, not an error. Drop every
+buffered input at or below `ack.seq`, rewind to the accumulated state, replay
+the rest:
 
 ```csharp
-long _acked = -1;
-
 client.Realtime.OnWorldAck += raw =>
 {
     var ack = JsonUtility.FromJson<WsWorldAckPayload>(
         JsonHelper.ExtractField(raw, "payload"));
 
-    if (ack.seq <= _acked) return;
-    _acked = ack.seq;
-
-    _pending.RemoveAll(p => p.seq <= _acked);
+    _pending.RemoveAll(p => p.seq <= ack.seq);
     ResetTo(_state);
     foreach (var p in _pending)
         Predict(p.input);
@@ -287,10 +270,10 @@ are your game's.
 
 - The ack is a high-water mark, not a receipt per input. A rejected input still
   advances it, so an input the world script declines never strands the client.
-- Prune and replay in the ack handler, never in the tick handler. A zone with
-  deltas to report sends its `world.tick` first and its `world.ack` second, but
-  a broadcast with nothing to report skips the tick entirely, so an ack can
-  arrive with no `world.tick` in front of it.
+- Prune and replay in the ack handler, never in the tick handler. A broadcast
+  with deltas to report sends `world.tick` first and `world.ack` second, but one
+  with nothing to report skips the tick entirely, so an ack can arrive with no
+  `world.tick` in front of it.
 - Acknowledgement is opt-in. The server records a `seq` only for players who
   stamp one, so a client that never stamps one gets no `world.ack` at all, and
   no error either.
@@ -299,28 +282,25 @@ are your game's.
 - `seq` must be a non-negative integer below 2^53, narrower than C#'s `long`:
   count up from zero, never seed from a nanosecond timestamp. An out-of-range
   `seq` is ignored, but the input is not. It is queued and applied to the world
-  as normal, and only the acknowledgement is skipped; if you already have a
-  valid `seq` on record the acks keep arriving every broadcast tick carrying
-  that older high-water mark rather than falling silent.
+  as normal, and only the acknowledgement is skipped.
 - `broadcast_interval` is a world-level value copied into each zone's config,
   and one ticker per world fans a single shared tick number out to every zone,
   so zones are not on independent schedules. Every `broadcast_interval`
-  simulation ticks, `3` by default, each subscribed zone emits its own pair, so
-  a full 3x3 ring is up to nine `world.tick` frames and nine `world.ack` frames
-  rather than one of each, and they land together on the same broadcast tick
-  rather than interleaved across cadences. Subscription snapshots are sent
-  immediately and ignore the interval. Set it to `1` in the world mode config
-  for an ack every tick. See the
-  [world server guide](https://asobi.dev/docs/world-server).
-- Needs a server carrying `world.ack`, which is asobi core v0.84.0 or newer. An
-  older one sends nothing, and the silence is the only symptom.
+  simulation ticks, `3` by default, each subscribed zone emits its own
+  `world.tick`, so a full 3x3 ring is up to nine tick frames rather than one,
+  and they land together on the same broadcast tick rather than interleaved
+  across cadences. Subscription snapshots are sent immediately and ignore the
+  interval. Set it to `1` in the world mode config for an ack every tick. See
+  the [world server guide](https://asobi.dev/docs/world-server).
+- Requires asobi core v0.84.1 or later.
 - `OnWorldAck` and the `seq` parameter arrived in asobi-unity v0.18.0, but on
   that release the loop above is dead. `WorldInputAsync` still wrapped the
-  payload as `{"data":"..."}`, which the zone reads as an empty input map, so
-  acks arrive and `seq` advances while nothing you send moves anything. The loop
-  needs a release in which `WorldInputAsync` sends the payload verbatim, and
-  v0.18.0 is not one. Confirm it on the wire: the input frame's `payload` should
-  be your input map, not an object holding a single `data` string.
+  payload as `{"data":"..."}`, which the zone receives still wrapped rather than
+  as your input map, so acks arrive and `seq` advances while nothing you send
+  moves anything. The loop needs a release in which `WorldInputAsync` sends the
+  payload verbatim, and v0.18.0 is not one. Confirm it on the wire: the input
+  frame's `payload` should be your input map, not an object holding a single
+  `data` string.
 - `OnWorldAck` fires on a background thread like every other realtime event, so
   reconciliation that touches `UnityEngine.Object` must marshal first.
 
