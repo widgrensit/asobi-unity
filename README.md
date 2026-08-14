@@ -292,8 +292,7 @@ are your game's.
   across cadences. Subscription snapshots are sent immediately and ignore the
   interval. Set it to `1` in the world mode config for an ack every tick. See
   the [world server guide](https://asobi.dev/docs/world-server).
-- Needs a server carrying `world.ack`, which is asobi core v0.84.1 or newer. An
-  older one sends nothing, and the silence is the only symptom.
+- Requires asobi core v0.84.1 or later.
 - `OnWorldAck` and the `seq` parameter arrived in asobi-unity v0.18.0, but on
   that release the loop above is dead. `WorldInputAsync` still wrapped the
   payload as `{"data":"..."}`, which the zone receives still wrapped rather than

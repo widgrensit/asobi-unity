@@ -260,8 +260,8 @@ namespace Asobi
 
         /// <summary>
         /// Send one input to the world you are in. Fire-and-forget: the frame
-        /// carries no <c>cid</c>, so the server has no way to report a bad
-        /// input back to you.
+        /// carries no <c>cid</c>, so a bad input draws an <c>error</c> frame
+        /// with reason <c>invalid_payload</c> that nothing ties back to it.
         /// </summary>
         /// <param name="inputJson">
         /// The input map itself, as a JSON object. <c>world.input</c> takes the
@@ -277,8 +277,8 @@ namespace Asobi
         /// </param>
         /// <exception cref="ArgumentException">
         /// <paramref name="inputJson"/> is not a JSON object. Thrown on the
-        /// first offending frame rather than sent, because nothing downstream
-        /// could tell you about it.
+        /// first offending frame rather than sent, because the server answers
+        /// one with an uncorrelated <c>error</c> frame and nothing else.
         /// </exception>
         /// <remarks>
         /// <c>data</c> is reserved at the top level of the input map: a payload
