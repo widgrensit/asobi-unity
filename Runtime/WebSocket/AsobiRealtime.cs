@@ -258,18 +258,37 @@ namespace Asobi
             return SendAsync("world.leave", "{}");
         }
 
-        // `inputJson` is the input map itself: world.input takes the payload
-        // verbatim. Unlike match.input it does not JSON-decode an inner `data`
-        // string, so a wrapped input reaches the zone as an empty map.
-        //
-        // Pass `seq` - a per-input sequence number your client increments - to
-        // opt into world.ack reconciliation; the server echoes back the highest
-        // seq it has consumed on OnWorldAck. Stamped as a top-level sibling of
-        // payload only when provided.
+        /// <summary>
+        /// Send one input to the world you are in. Fire-and-forget: the frame
+        /// carries no <c>cid</c>, so the server has no way to report a bad
+        /// input back to you.
+        /// </summary>
+        /// <param name="inputJson">
+        /// The input map itself, as a JSON object. <c>world.input</c> takes the
+        /// payload verbatim and, unlike <c>match.input</c>, does not JSON-decode
+        /// an inner string, so a wrapped input reaches the zone as an empty map.
+        /// Null or blank sends an empty map.
+        /// </param>
+        /// <param name="seq">
+        /// A per-input sequence number your client increments, to opt into
+        /// world.ack reconciliation; the server echoes back the highest seq it
+        /// has consumed on <c>OnWorldAck</c>. Stamped as a top-level sibling of
+        /// payload only when provided.
+        /// </param>
+        /// <exception cref="ArgumentException">
+        /// <paramref name="inputJson"/> is not a JSON object. Thrown on the
+        /// first offending frame rather than sent, because nothing downstream
+        /// could tell you about it.
+        /// </exception>
+        /// <remarks>
+        /// <c>data</c> is reserved at the top level of the input map: the
+        /// server unwraps it when it is a map, dropping every sibling key, and
+        /// discards the whole input when it is not. Name your fields anything
+        /// else (widgrensit/asobi#478).
+        /// </remarks>
         public Task WorldInputAsync(string inputJson, long? seq = null)
         {
-            if (string.IsNullOrEmpty(inputJson)) inputJson = "{}";
-            return SendFireAndForget("world.input", inputJson, seq);
+            return SendFireAndForget("world.input", WsFrame.WorldInputPayload(inputJson), seq);
         }
 
         // --- DM ---
@@ -301,7 +320,7 @@ namespace Asobi
             var tcs = new TaskCompletionSource<string>();
             _pending[cid] = tcs;
 
-            var msg = $"{{\"type\":\"{type}\",\"payload\":{payloadJson},\"cid\":\"{cid}\"}}";
+            var msg = WsFrame.Request(type, payloadJson, cid);
             var bytes = Encoding.UTF8.GetBytes(msg);
             await _ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, _cts.Token);
 

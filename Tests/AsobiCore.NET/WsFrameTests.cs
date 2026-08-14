@@ -3,8 +3,8 @@ using NUnit.Framework;
 namespace Asobi.Tests
 {
     // The outbound half of client-side prediction. AsobiRealtime needs Unity
-    // and is not linked here, so the envelope text is built by WsFrame and
-    // asserted on its own.
+    // and is not linked here, so both the envelope text and the world.input
+    // payload decision live in WsFrame and are asserted on their own.
     public class WsFrameTests
     {
         [Test]
@@ -34,6 +34,80 @@ namespace Asobi.Tests
             Assert.That(
                 WsFrame.FireAndForget("world.input", input, 0),
                 Is.EqualTo("{\"type\":\"world.input\",\"seq\":0,\"payload\":" + input + "}"));
+        }
+
+        // A correlated request: OnPendingResponse matches the reply on `cid`,
+        // so it is a sibling of payload, never a field inside it.
+        [Test]
+        public void ARequestCarriesItsCidBesidePayload()
+        {
+            Assert.That(
+                WsFrame.Request("match.join", "{\"match_id\":\"m-1\"}", "7"),
+                Is.EqualTo("{\"type\":\"match.join\",\"payload\":{\"match_id\":\"m-1\"},\"cid\":\"7\"}"));
+        }
+
+        [Test]
+        public void AnEmptyRequestPayloadIsStillAnObject()
+        {
+            Assert.That(
+                WsFrame.Request("world.leave", "{}", "12"),
+                Is.EqualTo("{\"type\":\"world.leave\",\"payload\":{},\"cid\":\"12\"}"));
+        }
+
+        // --- world.input payload ---
+
+        // Nothing to send is an empty input map, not an empty payload: the
+        // payload position always has to hold an object.
+        [TestCase(null)]
+        [TestCase("")]
+        [TestCase("   ")]
+        [TestCase("\t\n")]
+        public void AnAbsentInputBecomesAnEmptyMap(string input)
+        {
+            Assert.That(WsFrame.WorldInputPayload(input), Is.EqualTo("{}"));
+        }
+
+        // The whole point of the fix: the caller's object is the input map, so
+        // it goes out exactly as written, never wrapped in {"data":"..."}.
+        [Test]
+        public void AnObjectInputIsPassedThroughVerbatim()
+        {
+            const string input = "{\"kind\":\"move\",\"x\":600,\"y\":480}";
+            Assert.That(WsFrame.WorldInputPayload(input), Is.EqualTo(input));
+        }
+
+        // `data` is reserved at the top level (widgrensit/asobi#478): the
+        // server unwraps it when it is a map and drops the siblings. The SDK
+        // still sends it verbatim - quietly renaming or re-nesting it here
+        // would hide the server's rule instead of letting the game hit it.
+        [Test]
+        public void ATopLevelDataKeyIsStillSentVerbatim()
+        {
+            const string input = "{\"data\":{\"kind\":\"move\"},\"x\":600}";
+            Assert.That(WsFrame.WorldInputPayload(input), Is.EqualTo(input));
+        }
+
+        // Leading whitespace is legal JSON; the object behind it is what counts.
+        [Test]
+        public void LeadingWhitespaceBeforeAnObjectIsAccepted()
+        {
+            const string input = "  {\"kind\":\"move\"}";
+            Assert.That(WsFrame.WorldInputPayload(input), Is.EqualTo(input));
+        }
+
+        // Anything that is not an object either splices onto the wire as a
+        // malformed frame or reaches the server as a badmap. world.input has
+        // no cid, so neither can be reported back: throw on the developer's
+        // first frame instead of failing silently for the life of the game.
+        [TestCase("not json")]
+        [TestCase("[1,2,3]")]
+        [TestCase("  [1,2,3]")]
+        [TestCase("null")]
+        [TestCase("42")]
+        [TestCase("\"move\"")]
+        public void ANonObjectInputIsRejected(string input)
+        {
+            Assert.That(() => WsFrame.WorldInputPayload(input), Throws.ArgumentException);
         }
     }
 }
