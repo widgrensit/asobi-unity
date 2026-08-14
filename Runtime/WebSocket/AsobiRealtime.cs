@@ -194,9 +194,30 @@ namespace Asobi
         ///     if (reason == "quick_play_disabled") ShowModeClosed();
         /// }
         /// </code>
-        /// Branch on that, not on <c>payload.error.code</c>: the code is the
-        /// mapped one, <c>ws.request_failed</c> for every refusal here bar
-        /// <c>join_rate_limited</c>, so it cannot tell them apart.
+        /// Branch on <c>payload.reason</c> rather than <c>payload.error.code</c>:
+        /// several reasons here share the generic <c>ws.request_failed</c> code,
+        /// though not all do - <c>join_refused</c>, <c>match_full</c> and
+        /// <c>match_locked</c> carry their own mapped codes. The reason string
+        /// is the one field that tells every refusal apart.
+        ///
+        /// One refusal has a second level worth reading. The lobby can refuse
+        /// before the join (<c>not_found</c>, <c>quick_play_disabled</c>,
+        /// <c>wrong_mode_type</c>, <c>match_capacity_reached</c>), and the join
+        /// itself can refuse after a match is found (<c>join_refused</c>,
+        /// <c>match_full</c>, <c>match_locked</c>). When a game's own
+        /// <c>join</c> script refuses, <c>reason</c> is the fixed literal
+        /// <c>join_refused</c> and the script's own wording is one level
+        /// deeper, at <c>payload.error.details.refused_reason</c> - a script
+        /// cannot mint an error code, so its text travels as a detail. That
+        /// string is the one to show a player:
+        /// <code>
+        /// if (reason == "join_refused")
+        /// {
+        ///     var error = JsonScan.ExtractField(payload, "error");
+        ///     var details = JsonScan.ExtractField(error, "details");
+        ///     ShowRefused(JsonScan.Unquote(JsonScan.ExtractField(details, "refused_reason")));
+        /// }
+        /// </code>
         ///
         /// Requires asobi core v0.86.0 or later.
         /// </remarks>
