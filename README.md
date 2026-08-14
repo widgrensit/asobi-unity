@@ -164,6 +164,168 @@ On failure it throws `AsobiRpcException`. Branch on `Code`; `Message` is for
 humans and may be reworded at any time. `DetailsJson` carries whatever the
 extension attached, as raw JSON.
 
+## Worlds (client-side prediction)
+
+A world is a server-ticked room: join it with `WorldJoinAsync` (or
+`WorldFindOrCreateAsync`), push inputs with `WorldInputAsync`, and accumulate
+authoritative state from `OnWorldTick`.
+
+`WorldInputAsync(string inputJson, long? seq = null)` sends a JSON object that
+is itself the input map: the field names are your game's, and the server hands
+the map to the world script as it stands. One field name is reserved. If the
+map has a top-level `data`, the server substitutes it, so an object `data`
+becomes the input and a `data` that is anything else leaves the input empty.
+
+Stamp each input with `seq`, a monotonic counter your client owns, to opt into
+acknowledgement. Buffer the input under that `seq` and apply it locally at once:
+
+```csharp
+long _seq;
+readonly List<(long seq, string input)> _pending = new();
+
+async Task SendInput(string inputJson)
+{
+    var seq = ++_seq;
+    _pending.Add((seq, inputJson));
+    Predict(inputJson);
+    await client.Realtime.WorldInputAsync(inputJson, seq);
+}
+```
+
+`seq` is the second parameter and optional; omit it and the frame goes out
+unstamped. On the wire it is a top-level sibling of `payload`, never nested
+inside it:
+
+```json
+{"type":"world.input","seq":412,"payload":{"kind":"move","x":600,"y":480}}
+```
+
+`OnWorldTick` carries deltas: `payload.updates` is a list of `{op, id, ...}`
+entries, where `a` adds an entity with every field, `u` carries only the fields
+that changed, and `r` removes it. A zone sends a full `a` snapshot of its
+entities on every new subscription, meaning every time you are added to that
+zone's subscriber set and not only the first time. At the default `view_radius`
+of `1` you are subscribed to the 3x3 block of zones around you, so joining
+delivers one frame per loaded, non-empty zone in that ring rather than a single
+snapshot.
+
+A crossing re-snapshots too. The server recomputes the ring, unsubscribes the
+band that dropped out of it and subscribes the band that just entered, and each
+newly subscribed zone replays its full snapshot. Only the destination zone is
+exempt: at radius `1` it was already in the old ring, so re-subscribing to it
+takes an idempotent no-op branch. Leaving the ring sends `r` for each of that
+zone's entities, and walking back in re-subscribes you and replays the whole
+snapshot, so a player oscillating across a boundary re-snapshots on every pass.
+
+A zone holding no entities sends no snapshot, but the terrain push is a
+separate, unconditional step, so a world with a terrain provider still delivers
+that zone's chunk to `OnWorldTerrain`. Everything else is a delta, so
+accumulate every tick into your own state map (the entries are heterogeneous,
+so parse them with Newtonsoft.Json rather than `JsonUtility`):
+
+```csharp
+readonly Dictionary<string, Dictionary<string, object>> _state = new();
+
+client.Realtime.OnWorldTick += raw =>
+{
+    foreach (var u in ParseUpdates(raw))       // payload.updates
+    {
+        if (u.op == "r") _state.Remove(u.id);
+        else if (u.op == "a") _state[u.id] = u.fields;
+        else foreach (var f in u.fields) _state[u.id][f.Key] = f.Value;
+    }
+};
+```
+
+The server answers with `world.ack`, carrying the highest `seq` it has consumed
+for you as of `tick`:
+
+```json
+{"type":"world.ack","payload":{"tick":42,"seq":412}}
+```
+
+That mark is held per zone, not per connection, and every zone you are
+subscribed to acks you independently. Inputs only ever reach the zone you are
+standing in, so once you have crossed a boundary you get more than one
+`world.ack` per broadcast: the zone you left keeps emitting the frozen mark it
+recorded before you moved, so `payload.seq` can go backwards between
+consecutive acks. Nothing in the frame says which zone sent it. Keep a running
+maximum and ignore any ack that does not exceed it. Dropping everything at or
+below `ack.seq` is only safe against a mark that never moves backwards; prune
+straight from the received `seq` and you re-apply inputs the server has already
+consumed. Tracked as
+[widgrensit/asobi#477](https://github.com/widgrensit/asobi/issues/477), which
+also covers the "per-connection" wording the server source and the protocol
+guide still carry.
+
+`OnWorldAck` hands you the raw envelope, so pull out `payload` before
+deserializing into `WsWorldAckPayload` (`long tick`, `long seq`); passing the
+envelope straight to `JsonUtility` yields zeros, not an error. Advance the
+running maximum, drop every buffered input at or below it, rewind to the
+accumulated state, replay the rest:
+
+```csharp
+long _acked = -1;
+
+client.Realtime.OnWorldAck += raw =>
+{
+    var ack = JsonUtility.FromJson<WsWorldAckPayload>(
+        JsonHelper.ExtractField(raw, "payload"));
+
+    if (ack.seq <= _acked) return;
+    _acked = ack.seq;
+
+    _pending.RemoveAll(p => p.seq <= _acked);
+    ResetTo(_state);
+    foreach (var p in _pending)
+        Predict(p.input);
+};
+```
+
+That is the whole reconciliation loop. `Predict`, `ResetTo` and `ParseUpdates`
+are your game's.
+
+- The ack is a high-water mark, not a receipt per input. A rejected input still
+  advances it, so an input the world script declines never strands the client.
+- Prune and replay in the ack handler, never in the tick handler. A zone with
+  deltas to report sends its `world.tick` first and its `world.ack` second, but
+  a broadcast with nothing to report skips the tick entirely, so an ack can
+  arrive with no `world.tick` in front of it.
+- Acknowledgement is opt-in. The server records a `seq` only for players who
+  stamp one, so a client that never stamps one gets no `world.ack` at all, and
+  no error either.
+- The ack never rides the shared `world.tick` broadcast. It is addressed to you
+  alone, so the two always arrive as separate messages.
+- `seq` must be a non-negative integer below 2^53, narrower than C#'s `long`:
+  count up from zero, never seed from a nanosecond timestamp. An out-of-range
+  `seq` is ignored, but the input is not. It is queued and applied to the world
+  as normal, and only the acknowledgement is skipped; if you already have a
+  valid `seq` on record the acks keep arriving every broadcast tick carrying
+  that older high-water mark rather than falling silent.
+- `broadcast_interval` is a world-level value copied into each zone's config,
+  and one ticker per world fans a single shared tick number out to every zone,
+  so zones are not on independent schedules. Every `broadcast_interval`
+  simulation ticks, `3` by default, each subscribed zone emits its own pair, so
+  a full 3x3 ring is up to nine `world.tick` frames and nine `world.ack` frames
+  rather than one of each, and they land together on the same broadcast tick
+  rather than interleaved across cadences. Subscription snapshots are sent
+  immediately and ignore the interval. Set it to `1` in the world mode config
+  for an ack every tick. See the
+  [world server guide](https://asobi.dev/docs/world-server).
+- Needs a server carrying `world.ack`, which is asobi core v0.84.0 or newer. An
+  older one sends nothing, and the silence is the only symptom.
+- `OnWorldAck` and the `seq` parameter arrived in asobi-unity v0.18.0, but on
+  that release the loop above is dead. `WorldInputAsync` still wrapped the
+  payload as `{"data":"..."}`, which the zone reads as an empty input map, so
+  acks arrive and `seq` advances while nothing you send moves anything. The loop
+  needs a release in which `WorldInputAsync` sends the payload verbatim, and
+  v0.18.0 is not one. Confirm it on the wire: the input frame's `payload` should
+  be your input map, not an object holding a single `data` string.
+- `OnWorldAck` fires on a background thread like every other realtime event, so
+  reconciliation that touches `UnityEngine.Object` must marshal first.
+
+Frame reference: [client-side prediction](https://asobi.dev/docs/protocols/websocket#client-side-prediction).
+
 ## Features
 
 - **Auth** — Register, login, guest (anonymous device create-or-resume + upgrade), OAuth, provider linking, token refresh
