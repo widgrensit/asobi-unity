@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.IO;
 using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
@@ -10,6 +11,27 @@ namespace Asobi
 {
     public class AsobiRealtime : AsobiDispatcher, IDisposable
     {
+        /// <summary>
+        /// Ask the server for the binary <c>world.tick</c> encoding: roughly a fifth
+        /// of the bytes, and it arrives already decoded rather than as text you still
+        /// have to parse.
+        /// </summary>
+        /// <remarks>
+        /// Set it before <see cref="ConnectAsync"/>. Frames then reach
+        /// <see cref="AsobiDispatcher.OnWorldTickFrame"/> instead of
+        /// <see cref="AsobiDispatcher.OnWorldTick"/>; nothing else changes, and only
+        /// <c>world.tick</c> is affected. A server with the binary wire switched off
+        /// answers <c>json</c> and you silently stay on text, so read
+        /// <see cref="Wire"/> after <c>OnConnected</c> rather than assuming the
+        /// request was honoured.
+        /// </remarks>
+        public bool RequestBinaryWire;
+
+        /// <summary>The wire the server actually granted: <c>"json"</c> or
+        /// <c>"binary"</c>. Valid once <c>OnConnected</c> has fired.</summary>
+        public string Wire => GrantedWire;
+
+        readonly AsobiWire _wire = new AsobiWire();
         readonly AsobiClient _client;
         ClientWebSocket _ws;
         CancellationTokenSource _cts;
@@ -43,7 +65,13 @@ namespace Asobi
             await _ws.ConnectAsync(new Uri(_client.Config.WsUrl), _cts.Token);
             _ = ReceiveLoop();
 
-            var payload = JsonUtility.ToJson(new WsConnectPayload { token = _client.AccessToken });
+            var payload = RequestBinaryWire
+                ? JsonUtility.ToJson(new WsConnectWirePayload
+                {
+                    token = _client.AccessToken,
+                    wire = "binary",
+                })
+                : JsonUtility.ToJson(new WsConnectPayload { token = _client.AccessToken });
             await SendAsync("session.connect", payload);
 
             _reconnectAttempts = 0;
@@ -475,6 +503,23 @@ namespace Asobi
             return await tcs.Task;
         }
 
+        // A binary frame is a world.tick and nothing else. Decoded here and raised
+        // as OnWorldTickFrame; a malformed one is dropped with OnError rather than
+        // throwing, since a throw on the receive loop tears down the socket.
+        void HandleBinaryTick(byte[] bytes, int length)
+        {
+            var frame = _wire.Decode(bytes, length);
+            if (frame == null)
+            {
+                // Losing one frame costs a gap that frame_seq detects and a resync
+                // repairs; guessing at it would corrupt the caller's entity table
+                // with no way to notice.
+                RaiseError("malformed binary world.tick frame");
+                return;
+            }
+            RaiseWorldTickFrame(frame);
+        }
+
         async Task SendFireAndForget(string type, string payloadJson, long? seq = null)
         {
             var msg = WsFrame.FireAndForget(type, payloadJson, seq);
@@ -486,13 +531,20 @@ namespace Asobi
         {
             var buffer = new byte[8192];
             var sb = new StringBuilder();
+            // Only world.tick ever arrives as binary; everything else is JSON text
+            // on both wires. Accumulated separately from `sb` because UTF8-decoding
+            // binary bytes into a string, which is what this loop used to do to
+            // every frame regardless, produces mojibake rather than an error.
+            var binary = new MemoryStream();
 
             try
             {
                 while (_ws.State == WebSocketState.Open && !_cts.IsCancellationRequested)
                 {
                     sb.Clear();
+                    binary.SetLength(0);
                     WebSocketReceiveResult result;
+                    var isBinary = false;
 
                     do
                     {
@@ -503,10 +555,25 @@ namespace Asobi
                             ScheduleReconnect();
                             return;
                         }
-                        sb.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
+                        if (result.MessageType == WebSocketMessageType.Binary)
+                        {
+                            isBinary = true;
+                            binary.Write(buffer, 0, result.Count);
+                        }
+                        else
+                        {
+                            sb.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
+                        }
                     } while (!result.EndOfMessage);
 
-                    HandleMessage(sb.ToString());
+                    if (isBinary)
+                    {
+                        HandleBinaryTick(binary.GetBuffer(), (int)binary.Length);
+                    }
+                    else
+                    {
+                        HandleMessage(sb.ToString());
+                    }
                 }
             }
             catch (OperationCanceledException) { }

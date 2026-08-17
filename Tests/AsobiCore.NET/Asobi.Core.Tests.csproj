@@ -26,6 +26,7 @@
     <Compile Include="..\..\Runtime\WebSocket\AsobiDispatcher.cs" Link="Source\AsobiDispatcher.cs" />
     <Compile Include="..\..\Runtime\WebSocket\AsobiReconnectPolicy.cs" Link="Source\AsobiReconnectPolicy.cs" />
     <Compile Include="..\..\Runtime\WebSocket\WsFrame.cs" Link="Source\WsFrame.cs" />
+    <Compile Include="..\..\Runtime\WebSocket\AsobiWire.cs" Link="Source\AsobiWire.cs" />
     <Compile Include="..\..\Runtime\Models\AuthModels.cs" Link="Source\AuthModels.cs" />
     <Compile Include="..\..\Runtime\Models\RealtimeModels.cs" Link="Source\RealtimeModels.cs" />
     <Compile Include="..\..\Runtime\DeviceCredential.cs" Link="Source\DeviceCredential.cs" />
@@ -36,6 +37,7 @@
 
   <ItemGroup>
     <None Include="..\..\Tests\Runtime\Resources\Fixtures\*.json" Link="Fixtures\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\Tests\Runtime\Resources\Fixtures\wire\*" Link="Fixtures\wire\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
