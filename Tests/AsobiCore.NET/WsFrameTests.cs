@@ -1,3 +1,4 @@
+using System.Globalization;
 using NUnit.Framework;
 
 namespace Asobi.Tests
@@ -148,6 +149,39 @@ namespace Asobi.Tests
         {
             Assert.That(WsFrame.WorldInputPayload("{\"a\":{\"b\":[1,2]}}"), Is.EqualTo("{\"a\":{\"b\":[1,2]}}"));
             Assert.That(WsFrame.WorldInputPayload(" {\"a\":1} \n"), Is.EqualTo(" {\"a\":1} \n"));
+        }
+
+        [Test]
+        public void WorldResyncPayloadNamesOneZoneAsACoordinatePair()
+        {
+            Assert.That(WsFrame.WorldResyncPayload(3, 4), Is.EqualTo("{\"zone\":[3,4]}"));
+        }
+
+        [Test]
+        public void WorldResyncPayloadHandlesZeroAndNegativeCoordinates()
+        {
+            // Zone [0,0] is a real zone, and coordinates go negative either side
+            // of the origin, so neither may be dropped or reformatted.
+            Assert.That(WsFrame.WorldResyncPayload(0, 0), Is.EqualTo("{\"zone\":[0,0]}"));
+            Assert.That(WsFrame.WorldResyncPayload(-2, -11), Is.EqualTo("{\"zone\":[-2,-11]}"));
+        }
+
+        [Test]
+        public void WorldResyncPayloadIsCultureInvariant()
+        {
+            // A culture that groups digits would splice a separator into the
+            // array and produce a frame the server rejects as malformed - the
+            // kind of bug that only ever appears on someone else's machine.
+            var previous = CultureInfo.CurrentCulture;
+            try
+            {
+                CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+                Assert.That(WsFrame.WorldResyncPayload(1234567, -890), Is.EqualTo("{\"zone\":[1234567,-890]}"));
+            }
+            finally
+            {
+                CultureInfo.CurrentCulture = previous;
+            }
         }
     }
 }
