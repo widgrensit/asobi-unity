@@ -375,6 +375,61 @@ namespace Asobi
             return SendFireAndForget("world.input", WsFrame.WorldInputPayload(inputJson), seq);
         }
 
+
+        /// <summary>
+        /// Asks the server to re-send a complete baseline for one zone, after
+        /// frames for it went missing.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// asobi core v0.89.0 stamps three fields on the <c>world.tick</c>
+        /// payload your <c>OnWorldTick</c> handler already receives in full:
+        /// <c>zone</c> as <c>[x, y]</c>, <c>frame_seq</c>, and <c>kf</c>.
+        /// </para>
+        /// <para>
+        /// <c>frame_seq</c> counts frames the zone has broadcast and never
+        /// skips, so a jump by more than one means frames were lost. Do not use
+        /// <c>tick</c> for this: it skips on the server's broadcast interval and
+        /// is suppressed entirely on a tick that changed nothing, so a gap in it
+        /// is ambiguous. Call this method with that zone's coordinates, once per
+        /// gap. The reply is an ordinary <c>world.tick</c> for that zone with
+        /// <c>kf</c> true, listing every entity it holds: replace that zone's
+        /// entities with it rather than merging. Adopt it even when its
+        /// <c>frame_seq</c> is LOWER than what you have seen, because a zone
+        /// restart resets the sequence while the zone's identity does not change.
+        /// </para>
+        /// <para>
+        /// <b>Key your entities on <c>zone</c>.</b> A player is subscribed to an
+        /// interest ring of several zones at once, each an independent server
+        /// process, and frames from two of them have no order relative to each
+        /// other. A crossing emits <c>op: "r"</c> from the zone being left and
+        /// <c>op: "a"</c> from the zone being entered, so merging every zone into
+        /// one entity dictionary is last-writer-wins, and when the remove lands
+        /// last the entity is gone for good. Sequence tracking cannot save you
+        /// from that - both zones' sequences stay contiguous through it.
+        /// </para>
+        /// <para>
+        /// This SDK does not detect the gap for you, and that is deliberate
+        /// rather than an omission. It hands <c>OnWorldTick</c> the raw payload
+        /// and parses none of it, so a detector here would have to string-scan
+        /// the frame, and the only scanner available takes the first match in the
+        /// whole document - an entity in <c>updates</c> carrying a field named
+        /// <c>zone</c> or <c>frame_seq</c> would silently be read instead. You
+        /// already parse the frame to use <c>updates</c> at all, so you are
+        /// better placed to read the sequence than the SDK is.
+        /// </para>
+        /// <para>
+        /// Rate limited server-side to twice per ten seconds per player: ask once
+        /// per gap and wait for the keyframe rather than retrying. Requires asobi
+        /// core v0.89.0 or later; an older server answers <c>unknown_type</c>.
+        /// </para>
+        /// </remarks>
+        /// <param name="zoneX">The first element of the frame's <c>zone</c>.</param>
+        /// <param name="zoneY">The second element of the frame's <c>zone</c>.</param>
+        public Task WorldResyncAsync(long zoneX, long zoneY)
+        {
+            return SendFireAndForget("world.resync", WsFrame.WorldResyncPayload(zoneX, zoneY));
+        }
         // --- DM ---
 
         public Task SendDmAsync(string recipientId, string content)

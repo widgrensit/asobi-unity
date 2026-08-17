@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 
 namespace Asobi
 {
@@ -52,6 +53,29 @@ namespace Asobi
                     nameof(inputJson));
 
             return inputJson;
+        }
+
+        /// <summary>
+        /// The payload for a <c>world.resync</c> frame: the zone whose frames
+        /// went missing, as the same <c>[x, y]</c> pair the server puts on
+        /// <c>world.tick</c>.
+        /// </summary>
+        /// <remarks>
+        /// One zone per frame, never the whole interest ring. The ring is nine
+        /// zones at the default view radius, so asking for all of them turns a
+        /// small request into nine full baselines - and the caller already knows
+        /// which zone gapped, because the sequence is per zone.
+        ///
+        /// Formatted with the invariant culture. A long carries no decimal
+        /// separator, but a culture that groups digits would splice a comma into
+        /// the array and produce a frame the server rejects as malformed, which
+        /// is the kind of bug that only appears on someone else's machine.
+        /// </remarks>
+        internal static string WorldResyncPayload(long zoneX, long zoneY)
+        {
+            var x = zoneX.ToString(CultureInfo.InvariantCulture);
+            var y = zoneY.ToString(CultureInfo.InvariantCulture);
+            return $"{{\"zone\":[{x},{y}]}}";
         }
 
         // JSON's own whitespace set, not char.IsWhiteSpace: U+00A0 and friends are
