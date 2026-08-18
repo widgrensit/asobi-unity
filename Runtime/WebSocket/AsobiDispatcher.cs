@@ -18,6 +18,28 @@ namespace Asobi
         public event Action<string> OnVoteResult;
         public event Action<string> OnVoteVetoed;
         public event Action<string> OnWorldTick;
+
+        /// <summary>
+        /// A <c>world.tick</c> that arrived on the binary wire, already decoded.
+        /// </summary>
+        /// <remarks>
+        /// Fires instead of <see cref="OnWorldTick"/> for connections that
+        /// negotiated <c>RequestBinaryWire</c>, and never alongside it. The two are
+        /// separate events on purpose: <see cref="OnWorldTick"/> hands you raw JSON
+        /// text and parses none of it, so re-serialising a decoded frame to fire it
+        /// would hand back exactly the text-parsing cost the binary wire exists to
+        /// remove.
+        /// </remarks>
+        public event Action<AsobiWireFrame> OnWorldTickFrame;
+
+        /// <summary>The wire the server granted at <c>session.connected</c>, read
+        /// off the frame itself. <see cref="AsobiRealtime.Wire"/> is the public
+        /// spelling.</summary>
+        protected string GrantedWire { get; private set; } = "json";
+
+        /// <summary>Raises <see cref="OnWorldTickFrame"/>. Internal - the receive
+        /// loop calls this after decoding a binary frame.</summary>
+        protected void RaiseWorldTickFrame(AsobiWireFrame frame) => OnWorldTickFrame?.Invoke(frame);
         public event Action<string> OnWorldAck;
         public event Action<string> OnWorldTerrain;
         public event Action<string> OnWorldJoined;
@@ -48,6 +70,10 @@ namespace Asobi
 
         protected void RaiseDisconnected(string reason) => OnDisconnected?.Invoke(reason);
 
+        /// <summary>Raises <see cref="OnError"/> for a fault the SDK detected
+        /// itself, rather than a server <c>error</c> frame.</summary>
+        protected void RaiseError(string message) => OnError?.Invoke(message);
+
         // Fired before each retry, so games can show "Reconnecting (attempt/max)...".
         protected void RaiseReconnecting(int attempt, int maxAttempts) => OnReconnecting?.Invoke(attempt, maxAttempts);
 
@@ -67,6 +93,13 @@ namespace Asobi
             switch (env.Type)
             {
                 case "session.connected":
+                    // The wire the server GRANTED, which is not always the one
+                    // requested: a server with the binary wire off answers "json".
+                    // Read rather than infer it from the first frame's opcode.
+                    // ExtractField takes the first match in the whole document,
+                    // which is safe here and only here: session.connected carries
+                    // player_id and wire, and no nested object that could shadow it.
+                    GrantedWire = JsonScan.Unquote(JsonScan.ExtractField(raw, "wire")) ?? "json";
                     OnConnected?.Invoke();
                     break;
                 case "match.state":

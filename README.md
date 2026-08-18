@@ -323,6 +323,44 @@ Frame reference: [client-side prediction](https://asobi.dev/docs/protocols/webso
 - **Realtime** — WebSocket with events for matches, chat, presence, matchmaking
 - **Extensions** — Call server extension methods over RPC
 
+## Binary `world.tick`
+
+Ask for the binary encoding and `world.tick` arrives as a WebSocket binary frame
+in roughly a fifth of the bytes - and **already decoded**, which is the real
+saving on this SDK, since `OnWorldTick` hands you raw JSON text and parses none of
+it.
+
+```csharp
+client.Realtime.RequestBinaryWire = true;
+client.Realtime.OnWorldTickFrame += frame =>
+{
+    // frame.ZoneX / ZoneY, frame.FrameSeq, frame.Kf, frame.Tick
+    foreach (var r in frame.Records)
+    {
+        // r.Op is "a" / "u" / "r", r.Id is the entity id,
+        // r.Fields holds float / int / bool / string / null values
+    }
+};
+await client.Realtime.ConnectAsync();
+```
+
+Binary frames reach `OnWorldTickFrame`, not `OnWorldTick`, and never both. The two
+are separate events on purpose: re-serialising a decoded frame to fire
+`OnWorldTick` would hand back exactly the text-parsing cost the binary wire exists
+to remove. Only `world.tick` is affected; everything else stays JSON text on both
+wires.
+
+Entity ids are 2-byte slots on the wire and the SDK resolves them for you, so
+`r.Id` is the same id the JSON wire gives. `r.Id` is null only when the `add` that
+would have established the binding was lost, which is a `FrameSeq` gap - call
+`WorldResyncAsync` and the keyframe rebuilds every binding.
+
+Requires the server to have `binary_wire` switched on. If it does not, you
+silently stay on text - `client.Realtime.Wire` reads `"json"` or `"binary"` once
+`OnConnected` has fired, so read it rather than assume. The same fallback happens
+per frame for anything the server cannot encode as binary, such as an entity field
+holding an array.
+
 ## Build targets
 
 | Target | Status |

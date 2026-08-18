@@ -16,6 +16,16 @@ namespace Asobi
         public string token;
     }
 
+    // A separate class rather than a nullable field on the one above, because
+    // JsonUtility writes EVERY field: an optional `wire` would put `"wire": ""` on
+    // every connect frame a caller never asked to change.
+    [Serializable]
+    internal class WsConnectWirePayload
+    {
+        public string token;
+        public string wire;
+    }
+
     [Serializable]
     internal class WsMatchInputPayload
     {
