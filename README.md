@@ -326,7 +326,7 @@ Frame reference: [client-side prediction](https://asobi.dev/docs/protocols/webso
 ## Binary `world.tick`
 
 Ask for the binary encoding and `world.tick` arrives as a WebSocket binary frame
-in roughly a fifth of the bytes - and **already decoded**, which is the real
+in about a quarter of the bytes - and **already decoded**, which is the real
 saving on this SDK, since `OnWorldTick` hands you raw JSON text and parses none of
 it.
 

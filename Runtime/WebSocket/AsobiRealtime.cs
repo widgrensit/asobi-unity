@@ -12,7 +12,7 @@ namespace Asobi
     public class AsobiRealtime : AsobiDispatcher, IDisposable
     {
         /// <summary>
-        /// Ask the server for the binary <c>world.tick</c> encoding: roughly a fifth
+        /// Ask the server for the binary <c>world.tick</c> encoding: about a quarter
         /// of the bytes, and it arrives already decoded rather than as text you still
         /// have to parse.
         /// </summary>
