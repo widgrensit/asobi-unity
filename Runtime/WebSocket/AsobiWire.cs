@@ -25,6 +25,17 @@ namespace Asobi
         /// </remarks>
         public string Id;
 
+        /// <summary>
+        /// The slot's generation, advancing every time it is rebound to a
+        /// different entity.
+        /// </summary>
+        /// <remarks>
+        /// Redundant on this ordered, reliable wire - the sequencing already
+        /// bounds the reuse hazard - and carried anyway so a client also running
+        /// the datagram plane can keep ONE slot table for both carriers.
+        /// </remarks>
+        public byte Gen;
+
         /// <summary>The entity's changed fields. Values are float, int, bool,
         /// string or null.</summary>
         public readonly Dictionary<string, object> Fields = new Dictionary<string, object>();
@@ -89,7 +100,7 @@ namespace Asobi
     /// frame    Kind:8, ZX:32, ZY:32, FrameSeq:64, Kf:8, Tick:64,
     ///          DictLen:8, Dict, RecCount:16, Records
     /// dict     for each name: Len:8, Name/utf8            (at most 32 names)
-    /// record   Op:8, Slot:16, [IdLen:8, Id/utf8]?, FieldCount:8, Fields
+    /// record   Op:8, Slot:16, Gen:8, [IdLen:8, Id/utf8]?, FieldCount:8, Fields
     /// field    Type:3, Idx:5, Value                       (one header byte)
     /// </code>
     /// </remarks>
@@ -199,13 +210,14 @@ namespace Asobi
 
             for (var r = 0; r < recCount; r++)
             {
-                if (pos + 3 > len) return null;
+                if (pos + 4 > len) return null;
                 int opByte = b[pos];
                 if (opByte >= Ops.Length) return null;
                 var slot = ReadU16(b, pos + 1);
-                pos += 3;
+                var gen = b[pos + 3];
+                pos += 4;
 
-                var record = new AsobiWireRecord { Op = Ops[opByte] };
+                var record = new AsobiWireRecord { Op = Ops[opByte], Gen = gen };
                 if (opByte == 0)
                 {
                     if (pos >= len) return null;

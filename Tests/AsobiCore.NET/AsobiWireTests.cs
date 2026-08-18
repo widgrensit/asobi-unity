@@ -81,6 +81,10 @@ namespace Asobi.Tests
                 Assert.That(have.Op, Is.EqualTo(OpShort[want.GetProperty("op").GetString()]));
                 if (want.TryGetProperty("id", out var id))
                     Assert.That(have.Id, Is.EqualTo(id.GetString()));
+                // The generation. A decoder that skipped the byte shifts every later
+                // offset and fails loudly; one that read it from the wrong place
+                // would not, so pin the value.
+                Assert.That(have.Gen, Is.EqualTo(want.GetProperty("gen").GetByte()));
 
                 if (!want.TryGetProperty("fields", out var fields)) continue;
                 foreach (var field in fields.EnumerateObject())
