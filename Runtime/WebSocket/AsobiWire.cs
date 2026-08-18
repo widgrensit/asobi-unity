@@ -78,7 +78,7 @@ namespace Asobi
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Same information as the JSON frame in roughly a fifth of the bytes, and it
+    /// Same information as the JSON frame in about a quarter of the bytes, and it
     /// arrives already typed rather than as text you still have to parse - which is
     /// the real saving on this SDK, since <c>OnWorldTick</c> hands you a raw JSON
     /// string and parses none of it.
